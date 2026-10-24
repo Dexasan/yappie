@@ -64,6 +64,17 @@ export async function searchMessageProfiles(query: string) {
   return rows.map((profile) => ({ ...profile, avatar_path: avatars.get(profile.user_id) ?? null }));
 }
 
+export async function acknowledgeConversation(conversationId:string,throughTime:string) {
+  const {error}=await client().rpc('acknowledge_conversation',{target_conversation_id:conversationId,through_time:throughTime});
+  if(error)throw error;
+}
+export async function loadConversationPartner(conversationId:string) {
+  const {data,error}=await client().rpc('get_direct_conversation_partner',{target_conversation_id:conversationId});
+  if(error)throw error;
+  if(!data[0])throw new Error('This conversation is unavailable.');
+  return data[0];
+}
+
 export function subscribeToInbox(userId: string, onChange: () => void) {
   const activeClient = client();
   const channel = activeClient

@@ -29,7 +29,7 @@ function client() {
 }
 
 export async function joinQuickChat(interests: string[]) {
-  const { data, error } = await client().rpc('join_quick_chat_v2', {
+  const { data, error } = await client().rpc('join_quick_chat_v3', {
     match_interests: interests,
   });
   if (error) throw error;
@@ -91,10 +91,10 @@ export async function loadConversationMessages(conversationId: string) {
     .select('*')
     .eq('conversation_id', conversationId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(100);
   if (error) throw error;
-  return data;
+  return data.reverse();
 }
 
 export async function sendConversationMessage(conversationId: string, senderId: string, body: string) {

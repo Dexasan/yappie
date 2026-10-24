@@ -67,8 +67,8 @@ function client() {
   return supabase;
 }
 
-export async function loadClubs() {
-  const { data, error } = await client().rpc('list_clubs');
+export async function loadClubs(query='',offset=0,onlyJoined=false) {
+  const { data, error } = await client().rpc('search_clubs',{club_query:query,club_offset:offset,only_joined:onlyJoined});
   if (error) throw error;
   const rows = data as Omit<ClubSummary, 'member_role' | 'avatar_path'>[];
   if (rows.length === 0) return [];

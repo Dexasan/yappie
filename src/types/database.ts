@@ -982,6 +982,30 @@ export type Database = {
         Returns: string
       }
       get_activity_unread_count: { Args: never; Returns: number }
+      get_engagement_summary: { Args: never; Returns: { activity_count: number; message_count: number; global_new: boolean; following_new: boolean; checked_at: string }[] }
+      acknowledge_feed: { Args: { feed_mode: string; through_time: string }; Returns: undefined }
+      acknowledge_conversation: { Args:{target_conversation_id:string;through_time:string}; Returns:undefined }
+      get_direct_conversation_partner: { Args:{target_conversation_id:string}; Returns:{user_id:string;display_name:string|null;handle:string|null;avatar_path:string|null}[] }
+      join_quick_chat_v3: { Args:{match_interests:string[]}; Returns:{match_status:string;session_id:string|null;conversation_id:string|null;matched_profile_id:string|null;matched_interests:string[]}[] }
+      search_clubs: { Args:{club_query?:string;club_offset?:number;only_joined?:boolean}; Returns:{club_id:string;slug:string;name:string;description:string;topic:string;member_count:number;is_member:boolean;live_room_id:string|null;live_room_title:string|null;live_listener_count:number}[] }
+      record_app_event: { Args:{event_name:string;surface:string;duration_ms?:number}; Returns:undefined }
+      is_moderator: { Args:never; Returns:boolean }
+      list_moderation_reports: { Args:never; Returns:{report_id:string;target_kind:string;target_id:string|null;category:string;details:string;status:string;created_at:string;content_preview:string|null}[] }
+      review_moderation_report: { Args:{target_report_id:string;resolution:string;remove_content?:boolean}; Returns:undefined }
+      list_club_sessions: { Args:{target_club_id:string}; Returns:{session_id:string;title:string;starts_at:string;weekly:boolean;host_id:string;is_attending:boolean}[] }
+      schedule_club_session: { Args:{target_club_id:string;session_title:string;start_time:string;repeat_weekly?:boolean;session_timezone?:string}; Returns:string }
+      set_club_session_rsvp: { Args:{target_session_id:string;attending:boolean}; Returns:undefined }
+      start_scheduled_club_session: { Args:{target_session_id:string}; Returns:string }
+      cancel_club_session: { Args:{target_session_id:string}; Returns:undefined }
+      get_notification_preferences: { Args: never; Returns: Json }
+      set_notification_preferences: { Args: {preferences: Json}; Returns: undefined }
+      register_push_device: { Args: {push_token:string}; Returns: undefined }
+      unregister_push_device: { Args: {push_token:string}; Returns: undefined }
+      set_notification_attention: { Args: {target_conversation_id?:string}; Returns: undefined }
+      set_post_preference: { Args: { target_post_id: string; preference_kind: string; enabled: boolean }; Returns: undefined }
+      list_saved_posts: { Args: never; Returns: { post_id: string; body: string; created_at: string }[] }
+      delete_own_content: { Args: { content_kind: string; target_id: string }; Returns: undefined }
+      get_discover_feed: { Args: { feed_limit?: number; snapshot_time?: string; before_score?: number; before_id?: string }; Returns: { post_id: string; author_id: string; author_display_name: string | null; author_handle: string | null; author_country_code: string | null; body: string; topic: string | null; created_at: string; like_count: number; reply_count: number; liked_by_me: boolean; ranking_score: number }[] }
       heartbeat_direct_call: {
         Args: { target_call_id: string }
         Returns: boolean

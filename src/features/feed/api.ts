@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { loadAvatarPathMap } from '@/features/profile/avatar-data';
+import { uniqueRealtimeTopic } from '@/lib/realtime-topic';
 
 export type FeedPost = {
   author_avatar_path: string | null;
@@ -14,6 +15,7 @@ export type FeedPost = {
   post_id: string;
   reply_count: number;
   topic: string | null;
+  ranking_score?: number;
 };
 
 export type FeedReply = {
@@ -56,6 +58,13 @@ export async function loadFollowingFeed(beforeCreatedAt?: string) {
   return rows.map((post) => ({ ...post, author_avatar_path: avatars.get(post.author_id) ?? null }));
 }
 
+export async function loadDiscoverFeed(snapshot: string, cursor?: FeedPost) {
+  const { data, error } = await client().rpc('get_discover_feed', { feed_limit: 30, snapshot_time: snapshot, before_score: cursor?.ranking_score, before_id: cursor?.post_id });
+  if (error) throw error;
+  const avatars = await loadAvatarPathMap(data.map(post => post.author_id));
+  return data.map(post => ({ ...post, author_avatar_path: avatars.get(post.author_id) ?? null }));
+}
+
 export async function createPost(authorId: string, body: string, topic?: string) {
   const { data, error } = await client()
     .from('posts')
@@ -95,10 +104,29 @@ export async function createReply(postId: string, authorId: string, body: string
   return data;
 }
 
+export async function loadPost(postId: string): Promise<FeedPost | null> {
+  const { data: post, error } = await client().from('posts').select('*').eq('id', postId).is('deleted_at', null).maybeSingle();
+  if (error) throw error;
+  if (!post) return null;
+  const { data: author, error: authorError } = await client().from('profiles').select('display_name,handle,country_code,avatar_path').eq('id', post.author_id).maybeSingle();
+  if (authorError) throw authorError;
+  if (!author) return null;
+  return { post_id: post.id, author_id: post.author_id, author_display_name: author.display_name, author_handle: author.handle, author_country_code: author.country_code, author_avatar_path: author.avatar_path, body: post.body, topic: post.topic, created_at: post.created_at, like_count: 0, reply_count: 0, liked_by_me: false };
+}
+
+export function subscribeToPost(postId: string, onChange: () => void) {
+  const activeClient = client();
+  const channel = activeClient.channel(uniqueRealtimeTopic(`post:${postId}`))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'replies', filter: `post_id=eq.${postId}` }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'posts', filter: `id=eq.${postId}` }, onChange)
+    .subscribe();
+  return () => { void activeClient.removeChannel(channel); };
+}
+
 export function subscribeToNewPosts(onPost: () => void) {
   const activeClient = client();
   const channel = activeClient
-    .channel('feed:new-posts')
+    .channel(uniqueRealtimeTopic('feed:new-posts'))
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, onPost)
     .subscribe();
   return () => { void activeClient.removeChannel(channel); };
