@@ -1,0 +1,38 @@
+[
+  {
+    "key": "confirmation",
+    "slug": "confirm-sign-up",
+    "subject": "Confirm your Yappie email",
+    "file": "confirmation.html"
+  },
+  {
+    "key": "recovery",
+    "slug": "reset-password",
+    "subject": "Reset your Yappie password",
+    "file": "recovery.html"
+  },
+  {
+    "key": "email_change",
+    "slug": "change-email-address",
+    "subject": "Confirm your Yappie email change",
+    "file": "email_change.html"
+  },
+  {
+    "key": "magic_link",
+    "slug": "magic-link-or-otp",
+    "subject": "Your Yappie sign-in link",
+    "file": "magic_link.html"
+  },
+  {
+    "key": "invite",
+    "slug": "invite-user",
+    "subject": "Your invitation to Yappie",
+    "file": "invite.html"
+  },
+  {
+    "key": "reauthentication",
+    "slug": "reauthentication",
+    "subject": "Your Yappie verification code",
+    "file": "reauthentication.html"
+  }
+]
