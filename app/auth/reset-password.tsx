@@ -1,6 +1,7 @@
+import { Text, TextInput } from '@/components/Typography';
 import { useState } from 'react';
 import { Redirect, router } from 'expo-router';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { BrandLockup } from '@/components/Brand';
 import { Card, Eyebrow, Heading, Muted, PrimaryButton, Screen } from '@/components/ui';
@@ -19,15 +20,15 @@ export default function ResetPasswordScreen() {
     return <Redirect href={onboardingComplete ? '/(tabs)/quick-chat' : '/onboarding'} />;
   }
 
-  const canSubmit = password.length >= 8 && password === confirmation && !submitting;
+  const canSubmit = password.length >= 10 && /[A-Za-z]/.test(password) && /\d/.test(password) && password === confirmation && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError('');
     try {
-      await updatePassword(password);
-      router.replace(onboardingComplete ? '/(tabs)/quick-chat' : '/onboarding');
+      const profileWasAlreadyComplete = await updatePassword(password);
+      router.replace(profileWasAlreadyComplete ? '/(tabs)/quick-chat' : '/onboarding');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Could not update your password.');
       setSubmitting(false);
@@ -40,7 +41,7 @@ export default function ResetPasswordScreen() {
       <View style={styles.hero}>
         <Eyebrow>Account recovery</Eyebrow>
         <Heading>Choose a new password.</Heading>
-        <Muted>Use at least eight characters and avoid reusing a password from another account.</Muted>
+        <Muted>Use at least ten characters with a letter and number. Avoid reusing another password.</Muted>
       </View>
       <Card style={styles.form}>
         <Text style={styles.label}>New password</Text>
@@ -49,7 +50,7 @@ export default function ResetPasswordScreen() {
           autoCapitalize="none"
           autoComplete="new-password"
           onChangeText={setPassword}
-          placeholder="At least 8 characters"
+          placeholder="10+ characters, letter + number"
           placeholderTextColor={colors.textMuted}
           secureTextEntry
           style={styles.input}

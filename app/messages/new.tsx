@@ -1,6 +1,8 @@
+import { Text, TextInput } from '@/components/Typography';
+import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar, EmptyState, Eyebrow, Heading, Muted, Pill, Screen } from '@/components/ui';
 import { searchMessageProfiles, type MessageProfile } from '@/features/messages/api';
@@ -16,6 +18,13 @@ export default function NewMessageScreen() {
 
   useEffect(() => {
     let active = true;
+    setProfiles([]);
+    setError('');
+    if (query.trim() && query.trim().replace(/^@/, '').length < 2) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     const timer = setTimeout(() => {
       setLoading(true);
       setError('');
@@ -54,9 +63,10 @@ export default function NewMessageScreen() {
         </Pressable>
       </View>
       <View style={styles.hero}>
-        <Eyebrow>Reconnect</Eyebrow>
+        <InkDrawing motif="letter" size={48} />
+        <Eyebrow>A familiar hello</Eyebrow>
         <Heading compact>Start a conversation.</Heading>
-        <Muted>People you follow appear first. Their privacy preference still decides whether a new message can begin.</Muted>
+        <Muted>Pick someone you follow or have chatted with. Find someone else by typing their name or @handle.</Muted>
       </View>
 
       <View style={styles.searchWrap}>
@@ -77,7 +87,7 @@ export default function NewMessageScreen() {
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {loading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : null}
       {!loading && profiles.length === 0 ? (
-        <EmptyState description={query ? 'Try another name or handle.' : 'Follow people from Quick Chat, Feed, or Clubs to find them quickly here.'} glyph="⌕" title={query ? 'No people found' : 'Meet someone first'} />
+        <EmptyState description={query.trim().replace(/^@/, '').length === 1 ? 'Type at least two characters to find someone.' : query ? 'Check their name or @handle. Only people who allow you to message them appear.' : 'People you follow or have chatted with appear here. Search for a name to start a new conversation.'} glyph="⌕" title={query ? 'No matching accounts' : 'No contacts yet'} />
       ) : null}
 
       <View style={styles.list}>
@@ -92,6 +102,7 @@ export default function NewMessageScreen() {
               onPress={() => void startConversation(person)}
               style={({ pressed }) => [styles.personRow, pressed && styles.pressed]}
             >
+              <PaperSurface variant="letter" />
               <Avatar label={name} path={person.avatar_path} size={48} />
               <View style={styles.personCopy}>
                 <View style={styles.nameRow}>
@@ -123,7 +134,7 @@ const styles = StyleSheet.create({
   loading: { marginTop: spacing.xl },
   error: { color: colors.danger, fontSize: 13, marginTop: spacing.lg, textAlign: 'center' },
   list: { gap: spacing.sm, marginTop: spacing.xl },
-  personRow: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderColor: colors.border, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.md, padding: spacing.md },
+  personRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, padding: spacing.md },
   personCopy: { flex: 1, gap: 3 },
   nameRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   name: { color: colors.text, flexShrink: 1, fontSize: 14, fontWeight: '900' },

@@ -1,6 +1,7 @@
+import { Text, TextInput } from '@/components/Typography';
 import { useCallback, useMemo, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar, EmptyState, Muted, Pill, Screen } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
   handle: { color: colors.textSubtle, fontSize: 13, marginTop: 2 },
   bio: { fontSize: 14, lineHeight: 20, marginTop: spacing.xs },
   followButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.pill, minHeight: 46, minWidth: 92, paddingHorizontal: spacing.md, paddingVertical: 11 },
-  followingButton: { backgroundColor: colors.successSoft, borderColor: '#285C49', borderWidth: 1 },
+  followingButton: { backgroundColor: colors.successSoft, borderColor: colors.border, borderWidth: 1 },
   inactiveButton: { opacity: 0.55 },
   followLabel: { color: colors.primaryInk, fontSize: 14, fontWeight: '900' },
   followingLabel: { color: colors.success },

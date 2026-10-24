@@ -1,22 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput } from '@/components/Typography';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Alert, AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GiftPicker } from '@/components/GiftPicker';
+import { GiftArtwork } from '@/components/GiftArtwork';
 import { Avatar, Muted } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
-import { markConversationRead } from '@/features/messages/api';
+import { giftCheckoutEnabled } from '@/features/gifts/api';
+import { acknowledgeConversation, loadConversationPartner } from '@/features/messages/api';
 import {
   blockProfile,
   loadConversationMessages,
   reportProfile,
   sendConversationMessage,
   subscribeToConversationMessages,
-  loadPublicProfile,
   type Message,
 } from '@/features/quick-chat/api';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
+import { useDraft } from '@/lib/use-draft';
+import { useActivity } from '@/context/ActivityContext';
+import { trackEvent } from '@/features/analytics/api';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -25,49 +30,64 @@ function first(value: string | string[] | undefined) {
 export default function DirectConversationScreen() {
   const params = useLocalSearchParams<{ conversationId: string; partnerId: string; partnerName: string }>();
   const conversationId = first(params.conversationId);
-  const partnerId = first(params.partnerId);
-  const partnerName = first(params.partnerName) ?? 'Connection';
-  const { user } = useSession();
+  const [partner,setPartner]=useState<Awaited<ReturnType<typeof loadConversationPartner>>|null>(null);
+  const partnerId=partner?.user_id;
+  const partnerName=partner?.display_name ?? partner?.handle ?? 'Connection';
+  const { user, isLoading } = useSession();
+  const { refresh: refreshBadges } = useActivity();
+  const checkoutEnabled = giftCheckoutEnabled();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useDraft(user?.id, `message:${conversationId}`);
   const [sending, setSending] = useState(false);
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
   const [error, setError] = useState('');
   const [partnerAvatarPath, setPartnerAvatarPath] = useState<string | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
+  const focused=useRef(false);
+  const [appActive,setAppActive]=useState(AppState.currentState==='active');
+  useEffect(()=>{const subscription=AppState.addEventListener('change',state=>setAppActive(state==='active'));return ()=>subscription.remove();},[]);
 
   const addMessage = (message: Message) => {
     setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
   };
 
-  useEffect(() => {
-    if (!conversationId) return;
+  useFocusEffect(useCallback(() => {
+    if (!conversationId || !user || !appActive) return;
+    focused.current=true;
     let active = true;
-    void loadConversationMessages(conversationId)
-      .then((data) => {
+    setMessages([]);
+    setPartner(null);
+    setPartnerAvatarPath(null);
+    setError('');
+    void Promise.all([loadConversationMessages(conversationId),loadConversationPartner(conversationId)])
+      .then(([data,nextPartner]) => {
         if (!active) return;
-        setMessages(data);
-        void markConversationRead(conversationId).catch(() => undefined);
+        setMessages(current=>[...data,...current.filter(item=>!data.some(old=>old.id===item.id))].sort((a,b)=>a.created_at.localeCompare(b.created_at)));
+        setPartner(nextPartner);
+        setPartnerAvatarPath(nextPartner.avatar_path);
       })
       .catch((nextError: unknown) => { if (active) setError(nextError instanceof Error ? nextError.message : 'Could not load messages.'); });
-    if (partnerId) {
-      void loadPublicProfile(partnerId).then((profile) => {
-        if (active) setPartnerAvatarPath(profile.avatar_path);
-      }).catch(() => undefined);
-    }
     const unsubscribe = subscribeToConversationMessages(conversationId, (message) => {
+      if (!active) return;
       addMessage(message);
-      void markConversationRead(conversationId).catch(() => undefined);
     });
     return () => {
       active = false;
+      focused.current=false;
       unsubscribe();
     };
-  }, [conversationId, partnerId]);
+  }, [conversationId, user?.id, appActive]));
+
+  useEffect(()=>{
+    const newest=messages.at(-1);
+    if(conversationId && newest && focused.current && appActive) void acknowledgeConversation(conversationId,newest.created_at).then(refreshBadges).catch(()=>{});
+  },[conversationId,messages,appActive,refreshBadges]);
 
   useEffect(() => {
     if (messages.length) listRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
+
+  if (!isLoading && !user) return <Redirect href={{pathname:'/auth',params:{returnTo:`/messages/${conversationId}`}}} />;
 
   const send = async () => {
     const body = draft.trim();
@@ -77,6 +97,7 @@ export default function DirectConversationScreen() {
     setError('');
     try {
       addMessage(await sendConversationMessage(conversationId, user.id, body));
+      trackEvent('dm_sent','messages');
     } catch (nextError) {
       setDraft(body);
       setError(nextError instanceof Error ? nextError.message : 'Message failed to send.');
@@ -115,7 +136,8 @@ export default function DirectConversationScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoider}>
+        <View style={styles.header}>
         <Pressable accessibilityLabel="Back to messages" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>‹</Text>
         </Pressable>
@@ -134,28 +156,32 @@ export default function DirectConversationScreen() {
         </Pressable>
         <Pressable accessibilityRole="button" onPress={confirmReport} style={styles.action}><Text style={styles.report}>Report</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={confirmBlock} style={styles.action}><Text style={styles.block}>Block</Text></Pressable>
-      </View>
+        </View>
 
-      <FlatList
-        contentContainerStyle={styles.messages}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>This is the beginning of your conversation.</Text>}
-        ref={listRef}
-        renderItem={({ item }) => {
-          const own = item.sender_id === user?.id;
-          return (
-            <View style={[styles.bubble, own ? styles.ownBubble : styles.theirBubble]}>
-              <Text style={[styles.messageText, own && styles.ownMessageText]}>{item.body}</Text>
-            </View>
-          );
-        }}
-      />
+        <FlatList
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={styles.messages}
+          data={messages}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={<Text style={styles.empty}>This is the beginning of your conversation.</Text>}
+          ref={listRef}
+          renderItem={({ item }) => {
+            const own = item.sender_id === user?.id;
+            return (
+              <View style={[styles.bubble, own ? styles.ownBubble : styles.theirBubble]}>
+                <Text style={[styles.messageText, own && styles.ownMessageText]}>{item.body}</Text>
+              </View>
+            );
+          }}
+        />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.composer}>
-        <Pressable accessibilityLabel="Send a virtual gift" accessibilityRole="button" onPress={() => setGiftPickerVisible(true)} style={styles.giftButton}>
-          <Text style={styles.giftGlyph}>✦</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <View style={styles.composer}>
+        <Pressable accessibilityLabel={checkoutEnabled ? 'Send a gift' : 'Preview future gifts'} accessibilityRole="button" onPress={() => setGiftPickerVisible(true)} style={styles.giftButton}>
+          <GiftArtwork size={38} slug="gift_vault" />
+          {!checkoutEnabled ? <Text style={styles.giftLabBadge}>LAB</Text> : null}
         </Pressable>
         <TextInput
           accessibilityLabel="Message"
@@ -170,24 +196,26 @@ export default function DirectConversationScreen() {
         <Pressable accessibilityLabel="Send message" accessibilityRole="button" disabled={!draft.trim() || sending} onPress={() => void send()} style={[styles.sendButton, (!draft.trim() || sending) && styles.sendDisabled]}>
           <Text style={styles.sendLabel}>↑</Text>
         </Pressable>
-      </View>
-      {conversationId && partnerId ? (
-        <GiftPicker
-          contextId={conversationId}
-          contextKind="direct_message"
-          onClose={() => setGiftPickerVisible(false)}
-          recipientId={partnerId}
-          recipientName={partnerName}
-          visible={giftPickerVisible}
-        />
-      ) : null}
+        </View>
+        {conversationId && partnerId ? (
+          <GiftPicker
+            contextId={conversationId}
+            contextKind="direct_message"
+            onClose={() => setGiftPickerVisible(false)}
+            recipientId={partnerId}
+            recipientName={partnerName}
+            visible={giftPickerVisible}
+          />
+        ) : null}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  header: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  keyboardAvoider: { flex: 1 },
+  header: { alignItems: 'center', backgroundColor: colors.background, borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 14 },
   backButton: { alignItems: 'center', height: 48, justifyContent: 'center', width: 40 },
   backText: { color: colors.text, fontSize: 36, fontWeight: '300' },
   identity: { flex: 1 },
@@ -198,17 +226,17 @@ const styles = StyleSheet.create({
   block: { color: colors.danger, fontSize: 14, fontWeight: '800' },
   messages: { flexGrow: 1, gap: spacing.sm, justifyContent: 'flex-end', padding: spacing.lg },
   empty: { color: colors.textMuted, fontSize: 13, marginBottom: spacing.xl, textAlign: 'center' },
-  bubble: { borderRadius: radius.md, maxWidth: '82%', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  ownBubble: { alignSelf: 'flex-end', backgroundColor: colors.primary },
-  theirBubble: { alignSelf: 'flex-start', backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth },
-  messageText: { color: colors.text, fontSize: 15, lineHeight: 21 },
+  bubble: { borderRadius: 14, maxWidth: '82%', paddingHorizontal: 18, paddingVertical: 13 },
+  ownBubble: { alignSelf: 'flex-end', backgroundColor: colors.primary, borderBottomRightRadius: 2 },
+  theirBubble: { alignSelf: 'flex-start', backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderBottomLeftRadius: 2 },
+  messageText: { color: colors.text, fontSize: 16, lineHeight: 24 },
   ownMessageText: { color: colors.primaryInk },
   error: { color: colors.danger, fontSize: 12, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, textAlign: 'center' },
-  composer: { alignItems: 'flex-end', backgroundColor: colors.surfaceSoft, borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
-  giftButton: { alignItems: 'center', backgroundColor: colors.warningSoft, borderColor: '#6D5520', borderRadius: 27, borderWidth: 1, height: 54, justifyContent: 'center', width: 54 },
-  giftGlyph: { color: colors.warning, fontSize: 20, fontWeight: '900' },
-  input: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 27, borderWidth: 1, color: colors.text, flex: 1, fontSize: 17, maxHeight: 132, minHeight: 54, paddingHorizontal: spacing.lg, paddingVertical: 14 },
-  sendButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 27, height: 54, justifyContent: 'center', width: 54 },
+  composer: { alignItems: 'flex-end', backgroundColor: colors.background, borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, padding: 12 },
+  giftButton: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, height: 48, justifyContent: 'center', width: 44 },
+  giftLabBadge: { backgroundColor: colors.warningSoft, borderColor: colors.borderStrong, borderRadius: 5, borderWidth: 1, color: colors.warning, fontSize: 6, fontWeight: '900', letterSpacing: 0.5, paddingHorizontal: 4, paddingVertical: 2, position: 'absolute', right: -3, top: -5 },
+  input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, color: colors.text, flex: 1, fontSize: 15, maxHeight: 132, minHeight: 48, paddingHorizontal: 16, paddingVertical: 12 },
+  sendButton: { alignItems: 'center', backgroundColor: colors.accent, borderRadius: 8, height: 48, justifyContent: 'center', width: 48 },
   sendDisabled: { opacity: 0.4 },
-  sendLabel: { color: colors.primaryInk, fontSize: 24, fontWeight: '900' },
+  sendLabel: { color: colors.primaryInk, fontSize: 24, fontWeight: '800' },
 });

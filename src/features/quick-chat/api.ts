@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { uniqueRealtimeTopic } from '@/lib/realtime-topic';
 import type { Tables } from '@/types/database';
 
 export type Message = Tables<'messages'>;
@@ -10,8 +11,16 @@ export type PublicProfile = Pick<
 export type MatchResult = {
   conversation_id: string | null;
   match_status: 'matched' | 'queued';
+  matched_interests: string[];
   matched_profile_id: string | null;
   session_id: string | null;
+};
+
+export type TrendingInterest = {
+  glyph: string;
+  label: string;
+  score: number;
+  source: 'live' | 'discover';
 };
 
 function client() {
@@ -19,16 +28,29 @@ function client() {
   return supabase;
 }
 
-export async function joinQuickChat(languages: string[], topic?: string) {
-  const { data, error } = await client().rpc('join_quick_chat', {
-    match_languages: languages,
-    match_topic: topic || undefined,
+export async function joinQuickChat(interests: string[]) {
+  const { data, error } = await client().rpc('join_quick_chat_v3', {
+    match_interests: interests,
   });
   if (error) throw error;
 
   const result = data[0] as MatchResult | undefined;
   if (!result) throw new Error('The matcher returned no result.');
   return result;
+}
+
+export async function loadTrendingMatchInterests(limit = 10) {
+  const { data, error } = await client().rpc('list_trending_match_interests', {
+    limit_count: limit,
+  });
+  if (error) throw error;
+  return (data ?? []) as TrendingInterest[];
+}
+
+export async function loadQuickChatMatchingCount() {
+  const { data, error } = await client().rpc('get_quick_chat_matching_count');
+  if (error) throw error;
+  return Number(data ?? 0);
 }
 
 export async function cancelQuickChatSearch() {
@@ -43,6 +65,14 @@ export async function leaveQuickChat(sessionId: string, reason: 'left' | 'skip' 
   });
   if (error) throw error;
   return data;
+}
+
+export async function heartbeatQuickChat(sessionId: string) {
+  const { data, error } = await client().rpc('heartbeat_quick_chat', {
+    target_session_id: sessionId,
+  });
+  if (error) throw error;
+  return Boolean(data);
 }
 
 export async function loadPublicProfile(profileId: string) {
@@ -61,10 +91,10 @@ export async function loadConversationMessages(conversationId: string) {
     .select('*')
     .eq('conversation_id', conversationId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(100);
   if (error) throw error;
-  return data;
+  return data.reverse();
 }
 
 export async function sendConversationMessage(conversationId: string, senderId: string, body: string) {
@@ -96,7 +126,7 @@ export async function reportProfile(reporterId: string, targetUserId: string, de
 export function subscribeToConversationMessages(conversationId: string, onMessage: (message: Message) => void) {
   const activeClient = client();
   const channel = activeClient
-    .channel(`conversation:${conversationId}:messages`)
+    .channel(uniqueRealtimeTopic(`conversation:${conversationId}:messages`))
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },

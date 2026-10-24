@@ -19,9 +19,9 @@ Prove that a user can meet someone interesting, follow them, continue through DM
 
 - Quick Chat voice
 - Images and voice notes
-- Gifts, coins, and ads
+- Paid gifts, recipient earnings, withdrawals, and ads (Gift Lab artwork may remain as a clearly labelled preview)
 - Recommendation algorithms
-- Animated gifts and profile cosmetics
+- Sendable animated gifts and profile cosmetics
 - Public launch and non-Android clients
 
 ## Success signals
@@ -32,4 +32,3 @@ Prove that a user can meet someone interesting, follow them, continue through DM
 - DM continuation after Quick Chat
 - Day-one return
 - Reports and blocks per conversation
-

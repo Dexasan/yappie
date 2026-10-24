@@ -1,10 +1,12 @@
+import { Text, TextInput } from '@/components/Typography';
 import { useMemo, useState } from 'react';
 import { Redirect, router } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BrandLockup } from '@/components/Brand';
 import { Card, Eyebrow, Heading, Muted, PrimaryButton, Screen } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
+import { isHandleAvailable } from '@/features/social/api';
 import { colors, radius, spacing } from '@/theme/tokens';
 
 const languageOptions = ['English', 'Spanish', 'German', 'Italian', 'French', 'Portuguese', 'Hindi', 'Arabic', 'Nepali', 'Japanese'];
@@ -42,6 +44,7 @@ export default function OnboardingScreen() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
 
   const normalizedHandle = useMemo(
     () => handle.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''),
@@ -56,6 +59,8 @@ export default function OnboardingScreen() {
     countryCodeValid &&
     languages.length > 0 &&
     termsAccepted &&
+    handleStatus !== 'checking' &&
+    handleStatus !== 'taken' &&
     !submitting;
 
   if (!isLoading && !user) return <Redirect href="/auth" />;
@@ -67,6 +72,12 @@ export default function OnboardingScreen() {
     setError('');
 
     try {
+      setHandleStatus('checking');
+      if (!(await isHandleAvailable(normalizedHandle))) {
+        setHandleStatus('taken');
+        throw new Error('That username is already taken. Try another one.');
+      }
+      setHandleStatus('available');
       await completeOnboarding({
         birthDate,
         countryCode: normalizedCountryCode,
@@ -82,17 +93,29 @@ export default function OnboardingScreen() {
     }
   };
 
+  const checkUsername = async () => {
+    if (normalizedHandle.length < 3) {
+      setHandleStatus('idle');
+      return;
+    }
+    setHandleStatus('checking');
+    try {
+      setHandleStatus(await isHandleAvailable(normalizedHandle) ? 'available' : 'taken');
+    } catch {
+      setHandleStatus('idle');
+    }
+  };
+
   return (
     <Screen>
       <BrandLockup compact />
       <View style={styles.topRow}>
         <View style={styles.progressTrack}><View style={styles.progressFill} /></View>
-        <Text style={styles.step}>Almost there</Text>
       </View>
       <View style={styles.intro}>
         <Eyebrow>Make your first impression</Eyebrow>
-        <Heading>Give strangers a reason to say hey.</Heading>
-        <Muted>Your email and birth date stay private. The rest helps the right conversations find you.</Muted>
+        <Heading>Set up your profile</Heading>
+        <Muted>Your email and birth date stay private.</Muted>
       </View>
 
       <Card style={styles.form}>
@@ -113,13 +136,21 @@ export default function OnboardingScreen() {
           <TextInput
             accessibilityLabel="Username"
             autoCapitalize="none"
-            onChangeText={setHandle}
+            maxLength={25}
+            onBlur={() => void checkUsername()}
+            onChangeText={(value) => {
+              setHandle(value.replace(/^@+/, ''));
+              setHandleStatus('idle');
+            }}
             placeholder="alexaroundtheworld"
             placeholderTextColor={colors.textMuted}
             style={styles.handleInput}
             value={handle}
           />
         </View>
+        <Text style={[styles.handleStatus, handleStatus === 'taken' && styles.handleTaken, handleStatus === 'available' && styles.handleAvailable]}>
+          {handleStatus === 'checking' ? 'Checking…' : handleStatus === 'taken' ? 'Already taken' : handleStatus === 'available' ? `@${normalizedHandle} is yours` : 'One unique @username per person'}
+        </Text>
 
         <View style={styles.splitRow}>
           <View style={styles.splitField}>
@@ -196,7 +227,7 @@ export default function OnboardingScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
 
-      <PrimaryButton disabled={!canContinue} label={submitting ? 'Saving profile…' : 'Start yapping'} onPress={finish} />
+      <PrimaryButton disabled={!canContinue} label={submitting ? 'Saving profile…' : 'Continue'} onPress={finish} />
       <Text style={styles.privacy}>Your precise location is never collected or displayed.</Text>
     </Screen>
   );
@@ -207,15 +238,18 @@ const styles = StyleSheet.create({
   progressTrack: { backgroundColor: colors.surfaceRaised, borderRadius: radius.pill, height: 10, overflow: 'hidden', width: 142 },
   progressFill: { backgroundColor: colors.signal, borderRadius: radius.pill, height: '100%', width: '82%' },
   step: { color: colors.textMuted, fontSize: 13, fontWeight: '900', letterSpacing: 0.7, textTransform: 'uppercase' },
-  intro: { backgroundColor: colors.signalSoft, borderColor: '#3B5421', borderRadius: 30, borderWidth: 1, gap: spacing.md, marginBottom: spacing.xl, marginTop: spacing.xxl, padding: spacing.xl, transform: [{ rotate: '-0.5deg' }] },
-  form: { backgroundColor: colors.surface, borderRadius: 30, gap: spacing.md, marginBottom: spacing.lg },
+  intro: { borderTopColor: colors.primary, borderTopWidth: 1.5, borderBottomColor: colors.primary, borderBottomWidth: 1.5, gap: 12, marginBottom: 24, marginTop: 24, paddingVertical: 24 },
+  form: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, gap: 12, marginBottom: 24 },
   label: { color: colors.textMuted, fontSize: 14, fontWeight: '900', marginTop: spacing.xs },
   labelRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   helper: { color: colors.textSubtle, fontSize: 13, fontWeight: '700' },
-  input: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 18, borderWidth: 1, color: colors.text, fontSize: 17, minHeight: 60, paddingHorizontal: spacing.lg },
-  handleRow: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 18, borderWidth: 1, flexDirection: 'row', minHeight: 60, paddingHorizontal: spacing.lg },
+  input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: 4, borderWidth: 1, color: colors.text, fontSize: 16, minHeight: 54, paddingHorizontal: 16 },
+  handleRow: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: 4, borderWidth: 1, flexDirection: 'row', minHeight: 54, paddingHorizontal: 16 },
   at: { color: colors.cobalt, fontSize: 19, fontWeight: '900' },
   handleInput: { color: colors.text, flex: 1, fontSize: 17, paddingLeft: spacing.xs },
+  handleStatus: { color: colors.textSubtle, fontSize: 12, marginTop: -spacing.sm },
+  handleTaken: { color: colors.danger, fontWeight: '800' },
+  handleAvailable: { color: colors.success, fontWeight: '800' },
   splitRow: { flexDirection: 'row', gap: spacing.md },
   splitField: { flex: 1 },
   countryField: { width: 96 },
@@ -224,7 +258,7 @@ const styles = StyleSheet.create({
   choiceSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   choiceDisabled: { opacity: 0.4 },
   choiceText: { color: colors.textMuted, fontSize: 14, fontWeight: '800' },
-  choiceTextSelected: { color: colors.white },
+  choiceTextSelected: { color: colors.primaryInk },
   ageRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
   checkbox: { alignItems: 'center', borderColor: colors.borderStrong, borderRadius: 8, borderWidth: 1, height: 28, justifyContent: 'center', width: 28 },
   checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },

@@ -1,5 +1,6 @@
+import { Text } from '@/components/Typography';
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { BrandLockup } from '@/components/Brand';
 import { useSession } from '@/context/SessionContext';

@@ -1,70 +1,26 @@
+/** Yappie after dark: charcoal, warm chalk, and vermilion. */
 export const colors = {
-  background: '#0D0F12',
-  backgroundRaised: '#12151A',
-  surface: '#181B21',
-  surfaceRaised: '#22262E',
-  surfaceSoft: '#1D2027',
-  border: '#2C313A',
-  borderStrong: '#444B57',
-  primary: '#090B0E',
-  primaryPressed: '#000000',
-  primarySoft: '#282D36',
-  primaryInk: '#F7F5EF',
-  accent: '#FF6847',
-  accentSoft: '#3C211C',
-  signal: '#C8F55A',
-  signalSoft: '#263417',
-  cobalt: '#627BFF',
-  cobaltSoft: '#1C254B',
-  warning: '#FFBE4A',
-  warningSoft: '#3A2D13',
-  text: '#F4F2EC',
-  textMuted: '#AAA9A3',
-  textSubtle: '#90939B',
-  link: '#91A3FF',
-  danger: '#FF7A67',
-  dangerSoft: '#3C211C',
-  success: '#51D6A3',
-  successSoft: '#173329',
-  white: '#F7F5EF',
-  black: '#000000',
-  scrim: 'rgba(0, 0, 0, 0.74)',
-  primaryGlow: 'rgba(98, 123, 255, 0.11)',
-  accentGlow: 'rgba(200, 245, 90, 0.08)',
+  background: '#111110', backgroundRaised: '#171716',
+  surface: '#1A1A18', surfaceRaised: '#30302B', surfaceSoft: '#22221F',
+  border: '#383832', borderStrong: '#77746A',
+  primary: '#F1EBDD', primaryPressed: '#D6CBBB', primarySoft: '#30302B', primaryInk: '#111110',
+  accent: '#FF775D', accentSolid: '#BF3826', accentSoft: '#36201B',
+  signal: '#CDD8A2', signalSoft: '#252D20',
+  cobalt: '#C2AEDF', cobaltSoft: '#2B2435',
+  warning: '#E3BD76', warningSoft: '#30281B',
+  text: '#F1EBDD', textMuted: '#BCB7AB', textSubtle: '#9E9A8E', link: '#FF917B',
+  danger: '#FF8978', dangerSoft: '#36201E', success: '#AED0A0', successSoft: '#222E24',
+  white: '#FFF9ED', black: '#111110', scrim: 'rgba(0, 0, 0, 0.78)',
+  primaryGlow: 'rgba(201, 52, 32, 0.06)', accentGlow: 'rgba(201, 52, 32, 0.08)',
 } as const;
 
-export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-  hero: 48,
+export const fonts = {
+  body: 'DMSans_400Regular', medium: 'DMSans_500Medium', bold: 'DMSans_700Bold',
+  display: 'BarlowCondensed_700Bold', editorial: 'InstrumentSerif_400Regular', italic: 'InstrumentSerif_400Regular_Italic',
 } as const;
-
-export const radius = {
-  xs: 8,
-  sm: 12,
-  md: 18,
-  lg: 24,
-  xl: 30,
-  pill: 999,
-} as const;
-
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, hero: 48 } as const;
+export const radius = { xs: 3, sm: 5, md: 8, lg: 12, xl: 16, pill: 999 } as const;
 export const shadows = {
-  card: {
-    elevation: 1,
-    shadowColor: '#000000',
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-  },
-  floating: {
-    elevation: 12,
-    shadowColor: '#000000',
-    shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 24,
-  },
+  card: { elevation: 0, shadowColor: '#191917', shadowOffset: { height: 0, width: 0 }, shadowOpacity: 0, shadowRadius: 0 },
+  floating: { elevation: 6, shadowColor: '#191917', shadowOffset: { height: 4, width: 0 }, shadowOpacity: 0.08, shadowRadius: 12 },
 } as const;

@@ -2,6 +2,7 @@ node_modules/
 .expo/
 dist/
 dist-android*/
+*.apk
 android/
 *.jks
 *.keystore

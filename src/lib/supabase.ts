@@ -1,9 +1,9 @@
 import { AppState, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 
 import type { Database } from '@/types/database';
+import { secureAuthStorage } from '@/lib/secure-auth-storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -14,10 +14,11 @@ export const supabase: SupabaseClient<Database> | null =
   supabaseUrl && supabasePublishableKey
     ? createClient<Database>(supabaseUrl, supabasePublishableKey, {
         auth: {
-          ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
+          ...(Platform.OS !== 'web' ? { storage: secureAuthStorage } : {}),
           autoRefreshToken: true,
           persistSession: true,
           detectSessionInUrl: false,
+          flowType: 'pkce',
           lock: processLock,
         },
       })

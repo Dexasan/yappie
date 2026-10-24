@@ -1,9 +1,11 @@
+import { Text } from '@/components/Typography';
 import { useEffect, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Pill, SignalBars } from '@/components/ui';
+import { InkDrawing } from '@/components/InkArtwork';
 import { useSession } from '@/context/SessionContext';
 import { disconnectDirectCallAudio, useDirectCallAudio } from '@/features/calls/audio';
 import {
@@ -17,7 +19,8 @@ import {
   type DirectCall,
 } from '@/features/calls/api';
 import { blockProfile, reportProfile } from '@/features/quick-chat/api';
-import { colors, radius, shadows, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, shadows, spacing } from '@/theme/tokens';
+import { trackEvent } from '@/features/analytics/api';
 
 const terminalStatuses: CallStatus[] = ['declined', 'cancelled', 'missed', 'ended'];
 
@@ -46,16 +49,20 @@ export default function DirectCallScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const callStatusRef = useRef<CallStatus | null>(null);
   const leavingRef = useRef(false);
   const audio = useDirectCallAudio(callId, call?.status === 'accepted');
+  useEffect(()=>{if(audio.error)trackEvent('audio_failed','calls');},[audio.error]);
 
   useEffect(() => {
-    if (!callId || !user) return;
+    if (!callId || !user || !appIsActive) return;
     let active = true;
+    let latestUpdate = '';
     const applyCall = async (nextCall: DirectCall) => {
+      if (!active || nextCall.updated_at < latestUpdate) return;
+      latestUpdate = nextCall.updated_at;
       callStatusRef.current = nextCall.status;
-      if (!active) return;
       setCall(nextCall);
       if (!partner) {
         const nextPartner = await loadCallPartner(nextCall, user.id).catch(() => null);
@@ -70,8 +77,9 @@ export default function DirectCallScreen() {
       }
     });
     const unsubscribe = subscribeToDirectCall(callId, (nextCall) => void applyCall(nextCall));
-    return () => { active = false; unsubscribe(); };
-  }, [callId, user]);
+    const poll = setInterval(() => { void loadDirectCall(callId).then(applyCall).catch(() => undefined); }, 5000);
+    return () => { active = false; clearInterval(poll); unsubscribe(); };
+  }, [appIsActive, callId, user]);
 
   useEffect(() => {
     if (call?.status !== 'accepted' || !call.accepted_at) {
@@ -95,7 +103,7 @@ export default function DirectCallScreen() {
       });
     };
     heartbeat();
-    const interval = setInterval(heartbeat, 10_000);
+    const interval = setInterval(heartbeat, 6_000);
     return () => { active = false; clearInterval(interval); };
   }, [call?.status, callId]);
 
@@ -107,10 +115,9 @@ export default function DirectCallScreen() {
       await disconnectDirectCallAudio(callId).catch(() => undefined);
       await endDirectCall(callId, reason).catch(() => undefined);
     };
-    let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (previousState === 'active' && nextState !== 'active') void close('App closed');
-      previousState = nextState;
+      setAppIsActive(nextState === 'active');
+      if (nextState === 'background') void close('App closed');
     });
     return () => {
       subscription.remove();
@@ -161,7 +168,7 @@ export default function DirectCallScreen() {
       <View pointerEvents="none" style={styles.glowOne} />
       <View pointerEvents="none" style={styles.glowTwo} />
       <View style={styles.topRow}>
-        <Pill label={isActive ? 'Connected' : call?.status ?? 'Call'} tone={isActive ? 'success' : 'default'} />
+        <Pill label={isActive ? audio.isConnected ? 'Connected' : audio.error ? 'Audio interrupted' : 'Connecting audio' : call?.status ?? 'Call'} tone={audio.isConnected ? 'success' : 'default'} />
         <View style={styles.safetyRow}>
           <Pressable onPress={reportCaller} style={styles.smallAction}><Text style={styles.smallActionText}>Report</Text></Pressable>
           <Pressable onPress={blockCaller} style={styles.smallAction}><Text style={styles.smallActionText}>Block</Text></Pressable>
@@ -173,19 +180,23 @@ export default function DirectCallScreen() {
         <Text style={styles.partnerName}>{partnerName}</Text>
         <Text style={styles.partnerMeta}>{partner?.country_code ?? 'Worldwide'} · {partner?.languages?.slice(0, 2).join(', ') || 'YAPPIE member'}</Text>
         <Text style={styles.status}>{call ? statusCopy(call.status, partnerName) : 'Call unavailable'}</Text>
-        {isActive ? (
+        {isActive && audio.isConnected ? (
           <View style={styles.durationRow}><SignalBars /><Text style={styles.duration}>{formatDuration(elapsed)}</Text></View>
-        ) : call?.status === 'requested' ? <ActivityIndicator color={colors.signal} /> : null}
+        ) : isActive && !audio.error ? <><ActivityIndicator color={colors.signal} /><Text style={styles.partnerMeta}>{audio.isConfigured ? 'Waiting for both microphones…' : 'Audio is unavailable in this build.'}</Text></> : call?.status === 'requested' ? <ActivityIndicator color={colors.signal} /> : null}
         {audio.error || error ? <Text style={styles.error}>{audio.error || error}</Text> : null}
+        {isActive && audio.error ? <Pressable accessibilityRole="button" onPress={audio.retry} style={styles.smallAction}><Text style={styles.smallActionText}>Retry audio ↗</Text></Pressable> : null}
       </View>
 
       <View style={styles.controls}>
         {isActive ? (
           <Pressable accessibilityLabel={audio.isMuted ? 'Unmute microphone' : 'Mute microphone'} onPress={() => void audio.toggleMute()} style={styles.controlButton}>
-            <Text style={styles.controlGlyph}>{audio.isMuted ? '×' : '·'}</Text>
+            <InkDrawing motif={audio.isMuted ? 'plus' : 'sound'} size={32} color={colors.text} />
             <Text style={styles.controlLabel}>{audio.isMuted ? 'Unmute' : 'Mute'}</Text>
           </Pressable>
         ) : null}
+        {isActive ? <Pressable accessibilityRole="button" accessibilityLabel={audio.isSpeaker ? 'Use earpiece' : 'Use speaker'} accessibilityState={{ selected: audio.isSpeaker }} onPress={audio.toggleSpeaker} style={styles.controlButton}>
+          <InkDrawing motif="sound" size={32} color={audio.isSpeaker ? colors.signal : colors.textMuted} /><Text style={styles.controlLabel}>{audio.isSpeaker ? 'Speaker on' : 'Speaker'}</Text>
+        </Pressable> : null}
         {!isTerminal ? (
           <Pressable accessibilityLabel="End call" disabled={busy} onPress={() => void endCall()} style={[styles.endButton, busy && styles.disabled]}>
             <Text style={styles.endGlyph}>⌕</Text><Text style={styles.endLabel}>{call?.status === 'requested' ? 'Cancel' : 'Hang up'}</Text>
@@ -201,8 +212,8 @@ export default function DirectCallScreen() {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.background, flex: 1, overflow: 'hidden', padding: spacing.xl },
-  glowOne: { backgroundColor: colors.signalSoft, borderRadius: 160, height: 320, position: 'absolute', right: -170, top: 70, width: 320 },
-  glowTwo: { backgroundColor: colors.accentSoft, borderRadius: 120, bottom: -80, height: 240, left: -120, position: 'absolute', width: 240 },
+  glowOne: { borderColor: colors.accent, borderWidth: 3, borderRadius: 160, height: 320, position: 'absolute', right: -230, top: 70, width: 320, transform: [{ rotate: '-20deg' }] },
+  glowTwo: { borderColor: colors.primary, borderWidth: 2, borderRadius: 120, bottom: -80, height: 240, left: -180, position: 'absolute', width: 240 },
   loading: { flex: 1 },
   topRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   safetyRow: { flexDirection: 'row', gap: spacing.sm },
@@ -211,21 +222,21 @@ const styles = StyleSheet.create({
   callStage: { alignItems: 'center', flex: 1, gap: spacing.md, justifyContent: 'center' },
   avatarHalo: { ...shadows.floating, backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 84, borderWidth: 1, marginBottom: spacing.lg, padding: 10 },
   avatarHaloLive: { backgroundColor: colors.signal, borderColor: colors.signal },
-  partnerName: { color: colors.text, fontSize: 38, fontWeight: '900', letterSpacing: -1.6, textAlign: 'center' },
+  partnerName: { fontFamily: fonts.display, color: colors.text, fontSize: 52, lineHeight: 56, letterSpacing: -0.5, textAlign: 'center', textTransform: 'uppercase' },
   partnerMeta: { color: colors.textMuted, fontSize: 16, textAlign: 'center' },
-  status: { color: colors.text, fontSize: 18, fontWeight: '800', marginTop: spacing.lg, textAlign: 'center' },
+  status: { color: colors.text, fontFamily: fonts.italic, fontSize: 30, marginTop: spacing.lg, textAlign: 'center' },
   durationRow: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 8 },
   duration: { color: colors.signal, fontSize: 16, fontVariant: ['tabular-nums'], fontWeight: '900' },
   error: { color: colors.danger, fontSize: 14, lineHeight: 20, maxWidth: 300, textAlign: 'center' },
-  controls: { alignItems: 'center', flexDirection: 'row', gap: spacing.lg, justifyContent: 'center', minHeight: 100 },
-  controlButton: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 29, borderWidth: 1, height: 86, justifyContent: 'center', width: 86 },
+  controls: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'center', minHeight: 100 },
+  controlButton: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 8, borderWidth: 1, height: 86, justifyContent: 'center', width: 86 },
   controlGlyph: { color: colors.text, fontSize: 28, fontWeight: '900', lineHeight: 28 },
   controlLabel: { color: colors.text, fontSize: 13, fontWeight: '900' },
-  endButton: { alignItems: 'center', backgroundColor: colors.danger, borderRadius: 29, height: 86, justifyContent: 'center', width: 106 },
-  endGlyph: { color: colors.primary, fontSize: 29, fontWeight: '900', lineHeight: 30, transform: [{ rotate: '-45deg' }] },
-  endLabel: { color: colors.primary, fontSize: 13, fontWeight: '900' },
-  backButton: { alignItems: 'center', backgroundColor: colors.signal, borderRadius: 20, minHeight: 62, justifyContent: 'center', paddingHorizontal: spacing.xxl },
-  backLabel: { color: colors.primary, fontSize: 17, fontWeight: '900' },
+  endButton: { alignItems: 'center', backgroundColor: colors.danger, borderRadius: 8, height: 86, justifyContent: 'center', width: 106 },
+  endGlyph: { color: colors.primaryInk, fontSize: 29, fontWeight: '900', lineHeight: 30, transform: [{ rotate: '-45deg' }] },
+  endLabel: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
+  backButton: { alignItems: 'center', backgroundColor: colors.signal, borderRadius: 8, minHeight: 62, justifyContent: 'center', paddingHorizontal: spacing.xxl },
+  backLabel: { color: colors.primaryInk, fontSize: 17, fontWeight: '700' },
   disabled: { opacity: 0.5 },
   privacy: { color: colors.textSubtle, fontSize: 12, fontWeight: '700', paddingBottom: spacing.sm, textAlign: 'center' },
 });

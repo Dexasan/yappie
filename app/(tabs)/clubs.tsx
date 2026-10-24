@@ -1,11 +1,14 @@
-import { useCallback, useState } from 'react';
+import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
+import { Text, TextInput } from '@/components/Typography';
+import { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { Avatar, EmptyState, Screen, SignalBars } from '@/components/ui';
+import { EmptyState, RetroGlyph, RetroHeader, Screen, SkeletonRows } from '@/components/ui';
+import { ClubCover } from '@/components/ClubCover';
 import { joinClub, leaveClub, loadClubs, startClubRoom, type ClubSummary } from '@/features/clubs/api';
 import { clubAvatarPublicUrl } from '@/features/clubs/avatar';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, fonts, spacing } from '@/theme/tokens';
 
 export default function ClubsScreen() {
   const [clubs, setClubs] = useState<ClubSummary[]>([]);
@@ -15,19 +18,33 @@ export default function ClubsScreen() {
   const [roomTitle, setRoomTitle] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
+  const [membersOnly, setMembersOnly] = useState(false);
+  const [hasMore,setHasMore]=useState(false);
+  const [loadingMore,setLoadingMore]=useState(false);
+  const generation=useRef(0);
 
   const refresh = useCallback(async () => {
+    const request=++generation.current;
     setError('');
     try {
-      setClubs(await loadClubs());
+      const rows=await loadClubs(query,0,membersOnly);
+      if(request!==generation.current)return;
+      setClubs(rows);setHasMore(rows.length===30);
     } catch (nextError) {
+      if(request!==generation.current)return;
       setError(nextError instanceof Error ? nextError.message : 'Could not load clubs.');
     } finally {
-      setLoading(false);
+      if(request===generation.current)setLoading(false);
     }
-  }, []);
+  }, [query,membersOnly]);
 
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { const timer=setTimeout(()=>void refresh(),200);return ()=>{clearTimeout(timer);++generation.current;}; }, [refresh]));
+  const loadMore=async()=>{
+    if(loadingMore)return;setLoadingMore(true);const request=generation.current;
+    try{const rows=await loadClubs(query,clubs.length,membersOnly);if(request!==generation.current)return;setClubs(old=>[...old,...rows.filter(row=>!old.some(c=>c.club_id===row.club_id))]);setHasMore(rows.length===30);}
+    catch(e){if(request===generation.current)setError(e instanceof Error?e.message:'Could not load more clubs.');}
+    finally{setLoadingMore(false);}
+  };
 
   const toggleMembership = async (club: ClubSummary) => {
     setBusyClubId(club.club_id);
@@ -60,33 +77,33 @@ export default function ClubsScreen() {
   };
 
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleClubs = normalizedQuery
+  const searchedClubs = normalizedQuery
     ? clubs.filter((club) => [club.name, club.description, club.topic].some((value) => value.toLowerCase().includes(normalizedQuery)))
     : clubs;
+  const visibleClubs = searchedClubs.filter((club) => !membersOnly || club.is_member);
   const liveClubs = visibleClubs.filter((club) => club.live_room_id);
   const hostingClub = clubs.find((club) => club.club_id === hostingClubId) ?? null;
 
   return (
     <Screen>
-      <View style={styles.topBar}>
-        <Text style={styles.navTitle}>Clubs</Text>
-        <Pressable accessibilityLabel="Create a club" accessibilityRole="button" onPress={() => router.push('/clubs/create')} style={styles.createButton}>
-          <Text style={styles.createGlyph}>＋</Text>
-        </Pressable>
-      </View>
+      <RetroHeader compact
+        action={<Pressable accessibilityLabel="Create a club" accessibilityRole="button" onPress={() => router.push('/clubs/create')} style={styles.createButton}><RetroGlyph glyph="＋" tone="accent" /></Pressable>}
+        title="Clubs"
+        tone="warning"
+      />
 
       <View style={styles.searchWrap}>
         <Text style={styles.searchGlyph}>⌕</Text>
-        <TextInput accessibilityLabel="Search clubs" autoCapitalize="none" onChangeText={setQuery} placeholder="Search communities" placeholderTextColor={colors.textSubtle} style={styles.searchInput} value={query} />
-        {query ? <Pressable accessibilityLabel="Clear search" onPress={() => setQuery('')}><Text style={styles.clearSearch}>×</Text></Pressable> : null}
+        <TextInput accessibilityLabel="Search clubs" autoCapitalize="none" onChangeText={setQuery} placeholder="Search clubs" placeholderTextColor={colors.textSubtle} style={styles.searchInput} value={query} />
+        {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery('')} style={styles.clearButton}><Text style={styles.clearSearch}>×</Text></Pressable> : null}
       </View>
+      <View style={styles.filters}>{[false, true].map((onlyMine) => <Pressable key={String(onlyMine)} accessibilityRole="tab" accessibilityState={{ selected: membersOnly === onlyMine }} onPress={() => setMembersOnly(onlyMine)} style={[styles.filter, membersOnly === onlyMine && styles.filterSelected]}><Text style={[styles.filterText, membersOnly === onlyMine && styles.filterTextSelected]}>{onlyMine ? 'My clubs' : 'Explore'}</Text></Pressable>)}</View>
 
-      {loading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {loading ? <SkeletonRows /> : null}
+      {error ? <><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable accessibilityRole="button" onPress={() => { setLoading(true); void refresh(); }} style={styles.retryButton}><Text style={styles.filterText}>Try again</Text></Pressable></> : null}
 
       {liveClubs.length > 0 ? (
         <>
-          <View style={styles.sectionLine}><Text style={styles.sectionTitle}>Live now</Text><View style={styles.liveStatus}><View style={styles.liveDot} /><Text style={styles.liveCount}>{liveClubs.length}</Text></View></View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.liveScroller}>
             <View style={styles.liveRow}>
               {liveClubs.map((club) => (
@@ -95,11 +112,10 @@ export default function ClubsScreen() {
                   accessibilityRole="button"
                   onPress={() => router.push({ pathname: '/clubs/room/[roomId]', params: { roomId: club.live_room_id! } })}
                   style={({ pressed }) => [styles.liveCard, pressed && styles.pressed]}
-                >
-                  <View style={styles.liveTop}><View style={styles.liveLabel}><View style={styles.liveDot} /><Text style={styles.liveLabelText}>LIVE</Text></View><SignalBars /></View>
-                  <Text numberOfLines={2} style={styles.roomTitle}>{club.live_room_title}</Text>
-                  <Text numberOfLines={1} style={styles.liveClubName}>{club.name}</Text>
-                  <View style={styles.listenerRow}><Text style={styles.listenerIcon}>◉</Text><Text style={styles.listenerCopy}>{club.live_listener_count} listening</Text><Text style={styles.enterArrow}>→</Text></View>
+                ><PaperSurface variant="ticket" color={colors.accentSoft} ink={colors.accentSolid} />
+                  <View style={styles.liveTop}><View style={styles.liveLabel}><View style={styles.liveDot} /><Text style={styles.liveLabelText}>LIVE</Text></View><Text numberOfLines={1} style={styles.liveClubName}>{club.name}</Text></View>
+                  <Text numberOfLines={1} style={styles.roomTitle}>{club.live_room_title}</Text>
+                  <View style={styles.listenerRow}><Text style={styles.listenerCopy}>{club.live_listener_count} listening</Text><Text style={styles.enterArrow}>→</Text></View>
                 </Pressable>
               ))}
             </View>
@@ -107,33 +123,34 @@ export default function ClubsScreen() {
         </>
       ) : null}
 
-      {!loading ? <View style={styles.sectionLine}><Text style={styles.sectionTitle}>{query ? 'Results' : 'Find your people'}</Text><Text style={styles.sectionCount}>{visibleClubs.length} clubs</Text></View> : null}
-      {!loading && visibleClubs.length === 0 ? <EmptyState description="Try another word or create the community you wish existed." glyph="⌕" title="No clubs found" /> : null}
+      {!loading ? <View style={styles.sectionLine}><View style={styles.sectionLead}><RetroGlyph glyph="✦" size="sm" /><Text style={styles.sectionTitle}>{query ? 'Search results' : membersOnly ? 'My clubs' : 'All clubs'}</Text></View><Text style={styles.sectionCount}>{visibleClubs.length} clubs</Text></View> : null}
+      {!loading && !error && visibleClubs.length === 0 ? <EmptyState description={membersOnly ? 'Join a club from the Explore tab.' : 'Try another search or create a club.'} glyph="⌕" title={membersOnly ? 'No clubs joined' : 'No clubs found'} /> : null}
 
       <View style={styles.clubGrid}>
         {visibleClubs.map((club, index) => (
-          <View key={club.club_id} style={[styles.clubTile, index % 3 === 1 && styles.clubTileCobalt, index % 3 === 2 && styles.clubTileWarm]}>
+          <View key={club.club_id} style={styles.clubTile}>
+            <View style={[styles.coverShell, { transform: [{ rotate: index % 2 ? '1.5deg' : '-1.5deg' }] }]}>
+              <ClubCover height={88} label={club.name} uri={clubAvatarPublicUrl(club.avatar_path)} width={88} />
+            </View>
             <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/clubs/[clubId]', params: { clubId: club.club_id } })} style={styles.clubLink}>
-              <View style={styles.clubMark}><Avatar imageUrl={clubAvatarPublicUrl(club.avatar_path)} label={club.name} size={50} /></View>
-              <Text numberOfLines={2} style={styles.clubName}>{club.name}</Text>
+              <View style={styles.clubHeading}><Text numberOfLines={2} style={styles.clubName}>{club.name}</Text></View>
               <Text numberOfLines={1} style={styles.clubTopic}>{club.topic}</Text>
-              <Text style={styles.memberCount}>{club.member_count} members</Text>
+              <Text style={styles.memberCount}>{club.member_count} {club.member_count === 1 ? 'member' : 'members'}</Text>
             </Pressable>
             <View style={styles.tileActions}>
-              <Pressable disabled={busyClubId === club.club_id} onPress={() => void toggleMembership(club)} style={[styles.joinButton, club.is_member && styles.joinedButton]}>
+              {club.is_member && !club.live_room_id ? <Pressable accessibilityRole="button" accessibilityLabel={"Start a room in " + club.name} onPress={() => { setHostingClubId(club.club_id); setRoomTitle(''); }} style={styles.micButton}><InkDrawing motif="sound" size={30} color={colors.cobalt} /></Pressable> : null}
+              <Pressable accessibilityRole="button" accessibilityLabel={(club.is_member ? 'Leave ' : 'Join ') + club.name} disabled={Boolean(busyClubId)} onPress={() => void toggleMembership(club)} style={[styles.joinButton, club.is_member && styles.joinedButton]}>
                 <Text style={[styles.joinLabel, club.is_member && styles.joinedLabel]}>{busyClubId === club.club_id ? '…' : club.is_member ? 'Joined' : 'Join'}</Text>
               </Pressable>
-              {club.is_member && !club.live_room_id ? (
-                <Pressable accessibilityLabel={`Start a room in ${club.name}`} onPress={() => { setHostingClubId(club.club_id); setRoomTitle(''); }} style={styles.micButton}><Text style={styles.micGlyph}>◉</Text></Pressable>
-              ) : null}
             </View>
           </View>
         ))}
       </View>
 
+      {hasMore?<Pressable disabled={loadingMore} onPress={()=>void loadMore()} style={{padding:16}}><Text style={{color:colors.accent}}>{loadingMore?'Loading…':'Show more clubs'}</Text></Pressable>:null}
       {hostingClub ? (
         <View style={styles.hostPanel}>
-          <View style={styles.hostPanelTop}><View><Text style={styles.hostTitle}>Go live in {hostingClub.name}</Text><Text style={styles.hostHint}>Give people a reason to tap in.</Text></View><Pressable onPress={() => setHostingClubId(null)}><Text style={styles.hostClose}>×</Text></Pressable></View>
+          <View style={styles.hostPanelTop}><View><Text style={styles.hostTitle}>Start a room in {hostingClub.name}</Text><Text style={styles.hostHint}>Enter a room title.</Text></View><Pressable onPress={() => setHostingClubId(null)}><Text style={styles.hostClose}>×</Text></Pressable></View>
           <TextInput autoFocus maxLength={80} onChangeText={setRoomTitle} placeholder="What are you talking about?" placeholderTextColor={colors.textSubtle} style={styles.roomInput} value={roomTitle} />
           <Pressable disabled={!roomTitle.trim() || busyClubId === hostingClub.club_id} onPress={() => void startRoom(hostingClub)} style={[styles.startButton, (!roomTitle.trim() || busyClubId === hostingClub.club_id) && styles.disabled]}>
             <Text style={styles.startLabel}>{busyClubId === hostingClub.club_id ? 'Starting…' : 'Start live room'}</Text>
@@ -145,58 +162,57 @@ export default function ClubsScreen() {
 }
 
 const styles = StyleSheet.create({
-  topBar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  navTitle: { color: colors.text, fontSize: 25, fontWeight: '900', letterSpacing: -0.8 },
-  createButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 18, height: 48, justifyContent: 'center', width: 48 },
-  createGlyph: { color: colors.white, fontSize: 25, fontWeight: '700' },
-  searchWrap: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 18, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, paddingHorizontal: spacing.lg },
-  searchGlyph: { color: colors.textSubtle, fontSize: 19 },
-  searchInput: { color: colors.text, flex: 1, fontSize: 16, minHeight: 54 },
+  clubHeading: {flexDirection:'row',alignItems:'center',gap:7},
+  searchGlyph: { color: colors.textSubtle, fontSize: 25 },
+  filters: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  filter: { borderRadius: 40, paddingHorizontal: 22, minHeight: 44, justifyContent: 'center' },
+  filterSelected: { backgroundColor: colors.primary, transform: [{rotate:'-3deg'}] },
+  filterText: { color: colors.textSubtle, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  filterTextSelected: { color: colors.primaryInk, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  retryButton: { alignSelf: 'center', padding: 16 },
+  clearButton: { alignItems: 'center', justifyContent: 'center', minHeight: 44, width: 32 },
+  createButton: { borderRadius: 10 },
+  searchWrap: { alignItems: 'center', borderColor: colors.borderStrong, borderBottomWidth: 1, flexDirection: 'row', gap: 10, marginTop: 2, paddingHorizontal: 2 },
+  searchInput: { color: colors.text, flex: 1, fontSize: 14, minHeight: 44 },
   clearSearch: { color: colors.textMuted, fontSize: 23, paddingHorizontal: spacing.xs },
-  loading: { marginVertical: spacing.xl },
   error: { color: colors.danger, fontSize: 14, lineHeight: 21, marginTop: spacing.md, textAlign: 'center' },
-  sectionLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.md, marginTop: spacing.xl },
-  sectionTitle: { color: colors.text, fontSize: 20, fontWeight: '900', letterSpacing: -0.45 },
-  sectionCount: { color: colors.textSubtle, fontSize: 13, fontWeight: '700' },
-  liveStatus: { alignItems: 'center', flexDirection: 'row', gap: 6 },
+  sectionLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6, marginTop: 10 },
+  sectionLead: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  sectionTitle: { fontFamily: fonts.display, color: colors.text, fontSize: 21, fontWeight: '800', letterSpacing: -0.5 },
+  sectionCount: { color: colors.textSubtle, fontSize: 12, fontWeight: '500' },
   liveDot: { backgroundColor: colors.accent, borderRadius: 4, height: 8, width: 8 },
-  liveCount: { color: colors.accent, fontSize: 13, fontWeight: '900' },
-  liveScroller: { marginHorizontal: -18 },
-  liveRow: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: 18 },
-  liveCard: { backgroundColor: colors.primary, borderRadius: 24, gap: spacing.sm, minHeight: 196, padding: 18, width: 274 },
+  liveScroller: { marginHorizontal: -22, marginTop: 10 },
+  liveRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 22 },
+  liveCard: { gap: 2, minHeight: 94, paddingHorizontal: 20, paddingVertical: 12, width: 264 },
   liveTop: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   liveLabel: { alignItems: 'center', flexDirection: 'row', gap: 6 },
-  liveLabelText: { color: colors.accent, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  roomTitle: { color: colors.white, fontSize: 23, fontWeight: '900', letterSpacing: -0.7, lineHeight: 27, marginTop: spacing.sm },
-  liveClubName: { color: colors.signal, fontSize: 13, fontWeight: '800' },
+  liveLabelText: { color: colors.white, fontSize: 9, fontWeight: '700', letterSpacing: 1.8 },
+  roomTitle: { color: colors.white, fontFamily: fonts.editorial, fontSize: 25, lineHeight: 28 },
+  liveClubName: { color: colors.textMuted, fontSize: 11, flexShrink: 1, marginLeft: 8 },
   listenerRow: { alignItems: 'center', flexDirection: 'row', marginTop: 'auto' },
-  listenerIcon: { color: colors.cobaltSoft, fontSize: 15 },
-  listenerCopy: { color: '#C9C7C0', fontSize: 13, fontWeight: '700', marginLeft: 7 },
+  listenerCopy: { color: colors.textMuted, fontSize: 11 },
   enterArrow: { color: colors.white, fontSize: 22, marginLeft: 'auto' },
   pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] },
-  clubGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  clubTile: { backgroundColor: colors.signalSoft, borderColor: '#3B5421', borderRadius: 22, borderWidth: 1, minHeight: 220, padding: spacing.lg, width: '47.8%' },
-  clubTileCobalt: { backgroundColor: colors.cobaltSoft, borderColor: '#34458F' },
-  clubTileWarm: { backgroundColor: colors.warningSoft, borderColor: '#6D5520' },
-  clubLink: { flex: 1 },
-  clubMark: { alignItems: 'center', height: 52, justifyContent: 'center', marginBottom: spacing.md, width: 52 },
-  clubName: { color: colors.text, fontSize: 17, fontWeight: '900', letterSpacing: -0.35, lineHeight: 21 },
-  clubTopic: { color: colors.textMuted, fontSize: 13, fontWeight: '700', marginTop: 4 },
-  memberCount: { color: colors.textSubtle, fontSize: 12, marginTop: 7 },
-  tileActions: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  joinButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.pill, flex: 1, minHeight: 38, justifyContent: 'center', paddingHorizontal: spacing.sm },
-  joinedButton: { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: colors.borderStrong, borderWidth: 1 },
-  joinLabel: { color: colors.white, fontSize: 13, fontWeight: '900' },
+  clubGrid: { gap: 8 },
+  clubTile: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 112, borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: 2, paddingVertical: 11 },
+  coverShell: { marginLeft: 2 },
+  clubLink: { flex: 1, minHeight: 64, justifyContent: 'center' },
+  clubName: { color: colors.text, fontFamily: fonts.display, fontSize: 25, lineHeight: 26, textTransform: 'uppercase', flex: 1 },
+  clubTopic: { color: colors.textMuted, fontFamily: fonts.italic, fontSize: 19, lineHeight: 22, marginTop: 2 },
+  memberCount: { color: colors.textSubtle, fontSize: 11, marginTop: 4 },
+  tileActions: { alignItems: 'center', gap: 2, width: 76 },
+  joinButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 40, minWidth: 76, minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, transform: [{rotate:'-3deg'}] },
+  joinedButton: { backgroundColor: colors.surfaceRaised },
+  joinLabel: { color: colors.primaryInk, fontFamily: fonts.display, fontSize: 18, textTransform: 'uppercase', letterSpacing: 0.5 },
   joinedLabel: { color: colors.text },
-  micButton: { alignItems: 'center', backgroundColor: colors.cobalt, borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
-  micGlyph: { color: colors.white, fontSize: 13 },
-  hostPanel: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: 22, borderWidth: 1, gap: spacing.md, marginTop: spacing.lg, padding: spacing.lg },
+  micButton: { alignItems:'center',justifyContent:'center',height:44,width:44 },
+  hostPanel: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, gap: 16, marginTop: 16, padding: 20 },
   hostPanelTop: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   hostTitle: { color: colors.text, fontSize: 18, fontWeight: '900' },
   hostHint: { color: colors.textMuted, fontSize: 13, marginTop: 3 },
   hostClose: { color: colors.textMuted, fontSize: 25, lineHeight: 25 },
-  roomInput: { backgroundColor: colors.surfaceSoft, borderColor: colors.borderStrong, borderRadius: 16, borderWidth: 1, color: colors.text, fontSize: 16, minHeight: 54, paddingHorizontal: spacing.lg },
-  startButton: { alignItems: 'center', backgroundColor: colors.cobalt, borderRadius: 16, minHeight: 52, justifyContent: 'center' },
-  startLabel: { color: colors.white, fontSize: 15, fontWeight: '900' },
+  roomInput: { backgroundColor: colors.surfaceSoft, borderColor: colors.borderStrong, borderRadius: 9, borderWidth: 1, color: colors.text, fontSize: 16, minHeight: 54, paddingHorizontal: spacing.lg },
+  startButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 4, minHeight: 52, justifyContent: 'center' },
+  startLabel: { color: colors.primaryInk, fontSize: 13, fontWeight: '700' },
   disabled: { opacity: 0.45 },
 });

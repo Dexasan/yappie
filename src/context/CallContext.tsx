@@ -1,7 +1,8 @@
+import { Text } from '@/components/Typography';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, AppState, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
@@ -15,8 +16,7 @@ import {
   type CallPartner,
   type DirectCall,
 } from '@/features/calls/api';
-import { ensureDirectCallMicrophonePermission } from '@/features/calls/audio';
-import { colors, radius, shadows, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, shadows, spacing } from '@/theme/tokens';
 
 const availabilityPreferenceKey = 'yappie:available-for-calls';
 
@@ -78,6 +78,12 @@ export function CallProvider({ children }: PropsWithChildren) {
   const [incomingCall, setIncomingCall] = useState<DirectCall | null>(null);
   const [incomingPartner, setIncomingPartner] = useState<CallPartner | null>(null);
   const [incomingBusy, setIncomingBusy] = useState(false);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => setAppIsActive(state === 'active'));
+    return () => subscription.remove();
+  }, []);
 
   const syncAvailability = useCallback(async (available = desiredAvailability) => {
     if (!user) {
@@ -99,14 +105,16 @@ export function CallProvider({ children }: PropsWithChildren) {
       if (!active) return;
       setDesiredAvailability(stored === 'true');
       setIsAvailabilityBusy(false);
-    });
+    }).catch(() => { if (active) setIsAvailabilityBusy(false); });
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
     if (isAvailabilityBusy || !user) return;
     void syncAvailability();
-    const heartbeat = setInterval(() => void syncAvailability(), 15_000);
+    const heartbeat = setInterval(() => {
+      if (AppState.currentState === 'active') void syncAvailability();
+    }, 8_000);
     const appStateSubscription = AppState.addEventListener('change', () => void syncAvailability());
     return () => {
       clearInterval(heartbeat);
@@ -116,7 +124,7 @@ export function CallProvider({ children }: PropsWithChildren) {
   }, [isAvailabilityBusy, syncAvailability, user]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !appIsActive || !desiredAvailability) {
       setIncomingCall(null);
       setIncomingPartner(null);
       return;
@@ -151,20 +159,26 @@ export function CallProvider({ children }: PropsWithChildren) {
     };
     void loadPendingIncomingCall(user.id).then(present).catch(() => undefined);
     const unsubscribe = subscribeToIncomingCalls(user.id, (call) => void present(call));
+    const poll = setInterval(() => { void loadPendingIncomingCall(user.id).then(present).catch(() => undefined); }, 5_000);
     return () => {
       active = false;
+      clearInterval(poll);
       if (expiryTimer) clearTimeout(expiryTimer);
       unsubscribe();
     };
-  }, [user]);
+  }, [appIsActive, desiredAvailability, user]);
 
   const setAvailable = async (available: boolean) => {
     setIsAvailabilityBusy(true);
     setDesiredAvailability(available);
-    await AsyncStorage.setItem(availabilityPreferenceKey, String(available));
     try {
+      await AsyncStorage.setItem(availabilityPreferenceKey, String(available));
       const result = await setCallAvailability(available && AppState.currentState === 'active');
       setIsAvailableState(result);
+    } catch (error) {
+      setDesiredAvailability(!available);
+      setIsAvailableState(false);
+      Alert.alert('Could not update calls', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setIsAvailabilityBusy(false);
     }
@@ -174,6 +188,9 @@ export function CallProvider({ children }: PropsWithChildren) {
     if (!incomingCall || incomingBusy) return;
     setIncomingBusy(true);
     try {
+      // WebRTC is one of the heaviest native modules in the app. Load it only
+      // when a person actually answers a call, not during every app launch.
+      const { ensureDirectCallMicrophonePermission } = await import('@/features/calls/audio');
       const microphoneAllowed = await ensureDirectCallMicrophonePermission();
       if (!microphoneAllowed) {
         await respondDirectCall(incomingCall.id, false);
@@ -187,6 +204,8 @@ export function CallProvider({ children }: PropsWithChildren) {
       setIncomingCall(null);
       setIncomingPartner(null);
       router.push(`/calls/${callId}` as never);
+    } catch (error) {
+      Alert.alert('Could not answer', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setIncomingBusy(false);
     }
@@ -199,6 +218,8 @@ export function CallProvider({ children }: PropsWithChildren) {
       await respondDirectCall(incomingCall.id, false).catch(() => endDirectCall(incomingCall.id, 'Declined'));
       setIncomingCall(null);
       setIncomingPartner(null);
+    } catch (error) {
+      Alert.alert('Could not decline', error instanceof Error ? error.message : 'Please try again.');
     } finally {
       setIncomingBusy(false);
     }
@@ -237,15 +258,15 @@ const styles = StyleSheet.create({
   liveBadge: { alignItems: 'center', backgroundColor: colors.signalSoft, borderRadius: radius.pill, flexDirection: 'row', gap: 8, marginBottom: spacing.sm, paddingHorizontal: 13, paddingVertical: 8 },
   liveDot: { backgroundColor: colors.success, borderRadius: 5, height: 9, width: 9 },
   liveText: { color: colors.success, fontSize: 13, fontWeight: '900', letterSpacing: 0.6, textTransform: 'uppercase' },
-  callerName: { color: colors.text, fontSize: 30, fontWeight: '900', letterSpacing: -1, marginTop: spacing.xs },
+  callerName: { fontFamily: fonts.display, color: colors.text, fontSize: 30, fontWeight: '900', letterSpacing: -1, marginTop: spacing.xs },
   callerMeta: { color: colors.textMuted, fontSize: 15, textAlign: 'center' },
   privateNote: { color: colors.textSubtle, fontSize: 13, marginBottom: spacing.md, textAlign: 'center' },
   answerRow: { flexDirection: 'row', gap: spacing.lg, width: '100%' },
-  answerButton: { alignItems: 'center', borderRadius: 22, flex: 1, gap: 4, justifyContent: 'center', minHeight: 76 },
-  declineButton: { backgroundColor: colors.dangerSoft, borderColor: '#603128', borderWidth: 1 },
+  answerButton: { alignItems: 'center', borderRadius: 8, flex: 1, gap: 4, justifyContent: 'center', minHeight: 76 },
+  declineButton: { backgroundColor: colors.dangerSoft, borderColor: colors.border, borderWidth: 1 },
   acceptButton: { backgroundColor: colors.signal },
   answerGlyph: { color: colors.danger, fontSize: 28, fontWeight: '900', lineHeight: 30 },
-  acceptGlyph: { color: colors.primary, transform: [{ rotate: '-45deg' }] },
+  acceptGlyph: { color: colors.primaryInk, transform: [{ rotate: '-45deg' }] },
   answerLabel: { color: colors.danger, fontSize: 14, fontWeight: '900' },
-  acceptLabel: { color: colors.primary },
+  acceptLabel: { color: colors.primaryInk },
 });

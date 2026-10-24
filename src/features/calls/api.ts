@@ -1,3 +1,4 @@
+import { uniqueRealtimeTopic } from '@/lib/realtime-topic';
 import { supabase } from '@/lib/supabase';
 import type { Tables } from '@/types/database';
 
@@ -115,7 +116,7 @@ export async function loadCallPartner(call: DirectCall, currentUserId: string) {
 export function subscribeToIncomingCalls(userId: string, onCall: (call: DirectCall) => void) {
   const activeClient = client();
   const channel = activeClient
-    .channel(`user:${userId}:incoming-calls`)
+    .channel(uniqueRealtimeTopic(`user:${userId}:incoming-calls`))
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'direct_calls', filter: `callee_id=eq.${userId}` },
@@ -128,7 +129,7 @@ export function subscribeToIncomingCalls(userId: string, onCall: (call: DirectCa
 export function subscribeToDirectCall(callId: string, onCall: (call: DirectCall) => void) {
   const activeClient = client();
   const channel = activeClient
-    .channel(`call:${callId}:state`)
+    .channel(uniqueRealtimeTopic(`call:${callId}:state`))
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'direct_calls', filter: `id=eq.${callId}` },

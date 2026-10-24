@@ -1,11 +1,15 @@
 import type { Session, User } from '@supabase/supabase-js';
-import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
+import { AppState } from 'react-native';
 
-import { handleAuthCallbackUrl } from '@/lib/auth-callback';
+import { setAppPresence } from '@/features/presence/api';
+import { authCallbackUrl, handleAuthCallbackUrl } from '@/lib/auth-callback';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import type { Profile } from '@/types/models';
+import { unregisterDevice } from '@/features/notifications/device';
+import { clearAccountDrafts } from '@/lib/use-draft';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
@@ -35,7 +39,7 @@ type SessionValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<SignUpResult>;
-  updatePassword: (password: string) => Promise<void>;
+  updatePassword: (password: string, currentPassword?: string) => Promise<boolean>;
   user: User | null;
 };
 
@@ -61,9 +65,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const presenceRequestRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const loadUserData = useCallback(async (userId: string) => {
-    if (!supabase) return;
+    if (!supabase) return false;
 
     const [profileResult, settingsResult] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', userId).single(),
@@ -73,8 +78,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
     if (profileResult.error) throw profileResult.error;
     if (settingsResult.error) throw settingsResult.error;
 
+    const completed = Boolean(settingsResult.data.onboarding_completed_at);
     setProfile(mapProfile(profileResult.data, settingsResult.data.date_of_birth));
-    setOnboardingComplete(Boolean(settingsResult.data.onboarding_completed_at));
+    setOnboardingComplete(completed);
+    return completed;
   }, []);
 
   useEffect(() => {
@@ -118,6 +125,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       }
 
+      setIsLoading(true);
       void loadUserData(nextSession.user.id).finally(() => setIsLoading(false));
     });
 
@@ -135,6 +143,29 @@ export function SessionProvider({ children }: PropsWithChildren) {
       linkSubscription.remove();
     };
   }, [loadUserData]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const queuePresenceUpdate = (active: boolean) => {
+      presenceRequestRef.current = presenceRequestRef.current
+        .catch(() => undefined)
+        .then(() => setAppPresence(active))
+        .catch(() => undefined);
+    };
+    const heartbeat = () => {
+      if (AppState.currentState === 'active') queuePresenceUpdate(true);
+    };
+
+    heartbeat();
+    const interval = setInterval(heartbeat, 10_000);
+    const subscription = AppState.addEventListener('change', (state) => queuePresenceUpdate(state === 'active'));
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+      queuePresenceUpdate(false);
+    };
+  }, [session?.user.id]);
 
   const value = useMemo<SessionValue>(
     () => ({
@@ -154,7 +185,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       requestPasswordReset: async (email) => {
         if (!supabase) throw new Error('Supabase is not configured.');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: Linking.createURL('/auth/callback'),
+          redirectTo: `${authCallbackUrl}?intent=recovery`,
         });
         if (error) throw error;
       },
@@ -164,7 +195,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: Linking.createURL('/auth/callback') },
+          options: { emailRedirectTo: authCallbackUrl },
         });
         if (error) throw error;
 
@@ -172,14 +203,27 @@ export function SessionProvider({ children }: PropsWithChildren) {
       },
       signOut: async () => {
         if (!supabase) return;
+        await unregisterDevice();
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
       },
-      updatePassword: async (password) => {
+      updatePassword: async (password, currentPassword) => {
         if (!supabase) throw new Error('Supabase is not configured.');
+        if (!isPasswordRecovery) {
+          if (!session?.user.email || !currentPassword) throw new Error('Enter your current password first.');
+          const { error: reauthenticationError } = await supabase.auth.signInWithPassword({
+            email: session.user.email,
+            password: currentPassword,
+          });
+          if (reauthenticationError) throw new Error('Your current password is incorrect.');
+        }
         const { error } = await supabase.auth.updateUser({ password });
         if (error) throw error;
+        const { error: revokeError } = await supabase.auth.signOut({ scope: 'others' });
+        if (revokeError) throw revokeError;
+        const completed = session?.user ? await loadUserData(session.user.id) : false;
         setIsPasswordRecovery(false);
+        return completed;
       },
       refreshProfile: async () => {
         if (session?.user) await loadUserData(session.user.id);
@@ -201,17 +245,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
       },
       deleteAccount: async (currentPassword) => {
         if (!supabase || !session?.user.email) throw new Error('Your account session is unavailable.');
-
-        const { error: authenticationError } = await supabase.auth.signInWithPassword({
-          email: session.user.email,
-          password: currentPassword,
+        const { error } = await supabase.functions.invoke('delete-account', {
+          body: { password: currentPassword },
         });
-        if (authenticationError) throw new Error('Your current password is incorrect.');
-
-        const { error } = await supabase.rpc('delete_my_account');
         if (error) throw error;
 
         await supabase.auth.signOut({ scope: 'local' });
+        await clearAccountDrafts(session.user.id).catch(()=>{});
         setIsPasswordRecovery(false);
         setProfile(null);
         setOnboardingComplete(false);

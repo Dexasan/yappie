@@ -10,11 +10,11 @@ type RequestBody = {
   session_description?: SessionDescription;
   session_kind?: 'publisher' | 'subscriber';
   target_user_id?: string;
+  inspect_only?: boolean;
 };
 
 const headers = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Origin': '*',
   'Content-Type': 'application/json',
 };
 
@@ -25,7 +25,10 @@ function response(body: Record<string, unknown>, status = 200) {
 function isSessionDescription(value: unknown): value is SessionDescription {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<SessionDescription>;
-  return typeof candidate.sdp === 'string' && (candidate.type === 'offer' || candidate.type === 'answer');
+  return typeof candidate.sdp === 'string'
+    && candidate.sdp.length <= 32_768
+    && candidate.sdp.startsWith('v=0')
+    && (candidate.type === 'offer' || candidate.type === 'answer');
 }
 
 Deno.serve(async (request) => {
@@ -33,6 +36,8 @@ Deno.serve(async (request) => {
   if (request.method !== 'POST') return response({ error: 'Method not allowed.' }, 405);
 
   try {
+    const contentLength = Number(request.headers.get('content-length') ?? 0);
+    if (contentLength > 65_536) return response({ error: 'Request is too large.' }, 413);
     const authorization = request.headers.get('Authorization');
     if (!authorization) return response({ error: 'Authentication required.' }, 401);
 
@@ -56,8 +61,17 @@ Deno.serve(async (request) => {
     const { data: userData, error: userError } = await userClient.auth.getUser();
     if (userError || !userData.user) return response({ error: 'Invalid or expired session.' }, 401);
 
-    const body = await request.json().catch(() => null) as RequestBody | null;
+    const bodyText = await request.text();
+    if (bodyText.length > 65_536) return response({ error: 'Request is too large.' }, 413);
+    const body = (() => {
+      try { return JSON.parse(bodyText) as RequestBody; } catch { return null; }
+    })();
     if (!body?.action) return response({ error: 'action is required.' }, 400);
+
+    const { error: rateLimitError } = await userClient.rpc('consume_audio_rate_limit', {
+      target_action: body.action,
+    });
+    if (rateLimitError) return response({ error: 'Too many audio requests. Please slow down.' }, 429);
 
     const cloudflareBase = `https://rtc.live.cloudflare.com/v1/apps/${realtimeAppId}`;
     const cloudflareRequest = async (path: string, method: 'POST' | 'PUT', payload?: Record<string, unknown>) => {
@@ -76,7 +90,7 @@ Deno.serve(async (request) => {
       } catch {
         data = { errorDescription: text || 'Cloudflare returned an unreadable response.' };
       }
-      if (!providerResponse.ok) {
+      if (!providerResponse.ok || data.errorCode) {
         const description = typeof data.errorDescription === 'string' ? data.errorDescription : 'Cloudflare request failed.';
         throw new Error(description);
       }
@@ -151,26 +165,15 @@ Deno.serve(async (request) => {
 
       let existingQuery = admin
         .from('room_audio_sessions')
-        .select('id, provider_session_id, provider_track_mid, session_kind')
+        .select('id')
         .eq('user_id', userData.user.id)
         .eq('session_kind', body.session_kind)
         .eq('status', 'active');
       existingQuery = body.call_id ? existingQuery.eq('call_id', body.call_id) : existingQuery.eq('room_id', body.room_id!);
       const { data: existingSessions } = await existingQuery;
-
-      if (body.session_kind === 'publisher') {
-        await Promise.allSettled((existingSessions ?? []).map((session) => forceCloseProviderTrack(session)));
+      if (existingSessions?.[0]) {
+        return response({ mediaSessionId: existingSessions[0].id, reused: true });
       }
-      let closeExistingQuery = admin
-        .from('room_audio_sessions')
-        .update({ status: 'closed' })
-        .eq('user_id', userData.user.id)
-        .eq('session_kind', body.session_kind)
-        .eq('status', 'active');
-      closeExistingQuery = body.call_id
-        ? closeExistingQuery.eq('call_id', body.call_id)
-        : closeExistingQuery.eq('room_id', body.room_id!);
-      await closeExistingQuery;
 
       const provider = await cloudflareRequest('/sessions/new', 'POST');
       if (typeof provider.sessionId !== 'string') throw new Error('Cloudflare did not return a session ID.');
@@ -281,13 +284,14 @@ Deno.serve(async (request) => {
       const tracks = Array.isArray(provider.tracks) ? provider.tracks as Array<Record<string, unknown>> : [];
       const audioTrack = tracks.find((track) => track.kind === 'audio') ?? tracks[0];
       if (!audioTrack || typeof audioTrack.trackName !== 'string') throw new Error('Cloudflare did not create an audio track.');
-      await admin
+      const { error: publishError } = await admin
         .from('room_audio_sessions')
         .update({
           provider_track_mid: typeof audioTrack.mid === 'string' ? audioTrack.mid : null,
           published_track_name: audioTrack.trackName,
         })
         .eq('id', mediaSession.id);
+      if (publishError) throw publishError;
       return response({ provider });
     }
 
@@ -337,8 +341,12 @@ Deno.serve(async (request) => {
         .eq('user_id', userData.user.id)
         .maybeSingle();
       if (!ownedSession) return response({ closed: true });
-      if (ownedSession.session_kind === 'publisher') await forceCloseProviderTrack(ownedSession);
-      await admin.from('room_audio_sessions').update({ status: 'closed' }).eq('id', ownedSession.id);
+      try {
+        if (ownedSession.session_kind === 'publisher') await forceCloseProviderTrack(ownedSession);
+      } finally {
+        const { error: closeError } = await admin.from('room_audio_sessions').update({ status: 'closed' }).eq('id', ownedSession.id);
+        if (closeError) throw closeError;
+      }
       return response({ closed: true });
     }
 
@@ -356,16 +364,35 @@ Deno.serve(async (request) => {
       publisherQuery = mediaSession.call_id
         ? publisherQuery.eq('call_id', mediaSession.call_id)
         : publisherQuery.eq('room_id', mediaSession.room_id);
-      const { data: publishers } = await publisherQuery;
+      const { data: publishers, error: publishersError } = await publisherQuery;
+      if (publishersError) throw publishersError;
       if (mediaSession.call_id) {
         const tracks = (publishers ?? []).map((publisher) => ({
           location: 'remote',
           sessionId: publisher.provider_session_id,
           trackName: publisher.published_track_name,
         }));
+        const publisherKey = tracks.map((track) => `${track.sessionId}:${track.trackName}`).sort().join('|');
+        if (body.inspect_only) return response({ publisherKey, trackCount: tracks.length });
         if (tracks.length === 0) return response({ provider: null, trackCount: 0 });
         const provider = await cloudflareRequest(`/sessions/${mediaSession.provider_session_id}/tracks/new`, 'POST', { tracks });
-        return response({ provider, trackCount: tracks.length });
+        const received = Array.isArray(provider.tracks) ? provider.tracks as Array<Record<string, unknown>> : [];
+        const errors = received.filter((track) => track.errorCode);
+        if (errors.length && errors.every((track) => track.errorCode === 'empty_track_error')) {
+          return response({ provider: null, trackCount: 0, publisherKey, pending: true });
+        }
+        if (!received.length || errors.length) {
+          const failure = received.map((track) => ({
+            errorCode: track.errorCode,
+            errorDescription: track.errorDescription,
+            kind: track.kind,
+            location: track.location,
+            mid: track.mid,
+            trackName: track.trackName,
+          }));
+          throw new Error(`Remote track negotiation failed: ${JSON.stringify(failure)}`);
+        }
+        return response({ provider, trackCount: received.length, publisherKey });
       }
       const publisherIds = [...new Set((publishers ?? []).map((publisher) => publisher.user_id))];
       const { data: currentSpeakers } = publisherIds.length
@@ -401,6 +428,8 @@ Deno.serve(async (request) => {
 
     return response({ error: 'Unsupported action.' }, 400);
   } catch (error) {
-    return response({ error: error instanceof Error ? error.message : 'Unexpected audio gateway error.' }, 500);
+    const message = error instanceof Error ? error.message : 'unknown error';
+    console.error('Audio gateway failure:', message);
+    return response({ error: 'The audio request could not be completed.' }, 500);
   }
 });

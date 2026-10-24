@@ -1,14 +1,16 @@
+import { Text } from '@/components/Typography';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { loadCoinWallet, loadGiftCatalog, sendVirtualGift, type CoinWallet, type GiftCatalogItem, type GiftContextKind, type SendGiftResult } from '@/features/gifts/api';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { GiftArtwork } from '@/components/GiftArtwork';
+import { beginGiftCheckout, formatUsd, giftCheckoutEnabled, loadGiftCatalog, type GiftCatalogItem, type GiftContextKind } from '@/features/gifts/api';
+import { giftPresentation } from '@/features/gifts/presentation';
+import { colors, fonts, radius, spacing } from '@/theme/tokens';
 
 export function GiftPicker({
   contextId,
   contextKind,
   onClose,
-  onSent,
   recipientId,
   recipientName,
   visible,
@@ -16,26 +18,24 @@ export function GiftPicker({
   contextId?: string;
   contextKind: GiftContextKind;
   onClose: () => void;
-  onSent?: (result: SendGiftResult, gift: GiftCatalogItem) => void;
   recipientId: string;
   recipientName: string;
   visible: boolean;
 }) {
-  const [wallet, setWallet] = useState<CoinWallet | null>(null);
   const [catalog, setCatalog] = useState<GiftCatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sendingSlug, setSendingSlug] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const checkoutEnabled = giftCheckoutEnabled();
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [nextWallet, nextCatalog] = await Promise.all([loadCoinWallet(), loadGiftCatalog()]);
-      setWallet(nextWallet);
+      const nextCatalog = await loadGiftCatalog();
       setCatalog(nextCatalog);
+      setSelectedSlug((current) => current && nextCatalog.some((gift) => gift.slug === current) ? current : nextCatalog[0]?.slug ?? null);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Gifts are temporarily unavailable.');
     } finally {
@@ -45,91 +45,101 @@ export function GiftPicker({
 
   useEffect(() => {
     if (!visible) return;
-    setNotice('');
-    setSelectedSlug(null);
+    setError('');
     void refresh();
   }, [refresh, recipientId, visible]);
 
   const selectedGift = catalog.find((gift) => gift.slug === selectedSlug) ?? null;
 
   const send = async () => {
-    const gift = selectedGift;
-    if (!gift || !wallet || wallet.balance < gift.coin_cost || sendingSlug) return;
-    setSendingSlug(gift.slug);
+    if (!checkoutEnabled || !selectedGift || sendingSlug) return;
+    setSendingSlug(selectedGift.slug);
     setError('');
-    setNotice('');
     try {
-      const result = await sendVirtualGift({ contextId, contextKind, giftSlug: gift.slug, recipientId });
-      setWallet((current) => current ? { ...current, balance: result.balance, lifetime_spent: current.lifetime_spent + result.coin_cost } : current);
-      setNotice(`${gift.emoji} ${gift.name} sent!`);
-      setSelectedSlug(null);
-      onSent?.(result, gift);
+      await beginGiftCheckout({ contextId, contextKind, giftSlug: selectedGift.slug, recipientId });
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Could not send this gift.');
+      setError(nextError instanceof Error ? nextError.message : 'Could not open secure checkout. No payment was taken.');
     } finally {
       setSendingSlug(null);
     }
   };
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+    <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <View style={styles.modalRoot}>
         <Pressable accessibilityLabel="Close gift picker" accessibilityRole="button" onPress={onClose} style={styles.modalBackdrop} />
         <View style={styles.giftSheet}>
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeader}>
-            <View style={styles.sheetTitleCopy}><Text style={styles.sheetTitle}>Make their day</Text><Text numberOfLines={1} style={styles.sheetSubtitle}>Pick something for {recipientName}</Text></View>
-            <View style={styles.sheetBalance}><Text style={styles.sheetBalanceValue}>{wallet?.balance ?? '—'}</Text><Text style={styles.sheetBalanceLabel}>coins</Text></View>
+            <View style={styles.titleBlock}>
+              <Text style={styles.eyebrow}>{checkoutEnabled ? 'SEND A REAL GIFT' : 'GIFT LAB · FREE BETA'}</Text>
+              <Text style={styles.title}>{checkoutEnabled ? 'Make their screen light up.' : 'A little magic, still in the workshop.'}</Text>
+              <Text numberOfLines={1} style={styles.subtitle}>{checkoutEnabled ? `For ${recipientName}` : `Previewing the future collection for ${recipientName}`}</Text>
+            </View>
+            <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} style={styles.closeButton}><Text style={styles.closeGlyph}>×</Text></Pressable>
           </View>
 
-          {loading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : null}
+          {loading ? <ActivityIndicator color={colors.warning} style={styles.loading} /> : null}
           {!loading ? (
-            <View style={styles.giftGrid}>
+            <ScrollView contentContainerStyle={styles.giftRail} horizontal showsHorizontalScrollIndicator={false} style={styles.giftScroller}>
               {catalog.map((gift) => {
-                const unavailable = !wallet || wallet.balance < gift.coin_cost;
-                const busy = sendingSlug === gift.slug;
                 const selected = selectedSlug === gift.slug;
+                const presentation = giftPresentation(gift.slug);
                 return (
                   <Pressable
                     key={gift.slug}
-                    accessibilityLabel={`${gift.name}, ${gift.coin_cost} coins`}
+                    accessibilityLabel={checkoutEnabled ? `${gift.name}, ${formatUsd(gift.price_usd_cents)}` : `${gift.name} gift preview`}
                     accessibilityRole="button"
-                    accessibilityState={{ disabled: unavailable || Boolean(sendingSlug), selected }}
-                    disabled={unavailable || Boolean(sendingSlug)}
-                    onPress={() => { setSelectedSlug(gift.slug); setNotice(''); }}
-                    style={[styles.giftChoice, selected && styles.giftChoiceSelected, unavailable && styles.giftChoiceUnavailable, busy && styles.giftChoiceBusy]}
+                    accessibilityState={{ selected }}
+                    onPress={() => { setSelectedSlug(gift.slug); setError(''); }}
+                    style={[styles.giftChoice, { borderColor: selected ? presentation.accent : colors.border }, selected && { backgroundColor: presentation.background, shadowColor: presentation.accent }]}
                   >
-                    <Text style={styles.giftEmoji}>{gift.emoji}</Text>
-                    <Text style={styles.giftName}>{gift.name}</Text>
-                    <Text style={styles.giftCost}>{gift.coin_cost} coins</Text>
+                    <GiftArtwork animated={selected} size={72} slug={gift.slug} />
+                    <Text numberOfLines={1} style={styles.giftName}>{gift.name}</Text>
+                    <Text style={[styles.price, { color: presentation.accent }]}>{checkoutEnabled ? formatUsd(gift.price_usd_cents) : 'PREVIEW'}</Text>
+                    {gift.season_key !== 'evergreen' ? <Text style={styles.seasonTag}>{gift.season_key.toUpperCase()}</Text> : null}
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
           ) : null}
 
           {selectedGift ? (
-            <View style={styles.previewRow}>
-              <Text style={styles.previewEmoji}>{selectedGift.emoji}</Text>
-              <View style={styles.previewCopy}><Text style={styles.previewTitle}>{selectedGift.name} is ready</Text><Text style={styles.previewMeta}>Your balance after sending: {(wallet?.balance ?? 0) - selectedGift.coin_cost} coins</Text></View>
+            <View style={[styles.preview, { borderColor: giftPresentation(selectedGift.slug).accent }]}>
+              <GiftArtwork animated size={92} slug={selectedGift.slug} />
+              <View style={styles.previewCopy}>
+                <Text style={[styles.giftLabel, { color: giftPresentation(selectedGift.slug).accent }]}>{giftPresentation(selectedGift.slug).label}</Text>
+                <Text style={styles.previewTitle}>{selectedGift.name}</Text>
+                {checkoutEnabled ? (
+                  <>
+                    <View style={styles.splitRow}>
+                      <View style={styles.splitCell}><Text style={styles.splitValue}>{formatUsd(selectedGift.price_usd_cents)}</Text><Text style={styles.splitLabel}>YOU PAY</Text></View>
+                      <Text style={styles.arrow}>→</Text>
+                      <View style={styles.splitCell}><Text style={[styles.splitValue, styles.earning]}>50%</Text><Text style={styles.splitLabel}>OF NET TO THEM</Text></View>
+                    </View>
+                    {selectedGift.grants_premium_days ? <Text style={styles.bonus}>★ Also gives them {selectedGift.grants_premium_days} days of ad-free YAPPIE Premium + the full gift show.</Text> : null}
+                  </>
+                ) : (
+                  <View style={styles.betaNote}>
+                    <Text style={styles.betaNoteTitle}>DISPLAY SAMPLE / NOT SENDABLE</Text>
+                    <Text style={styles.betaNoteCopy}>No payment, earnings, or Premium is created in this beta.</Text>
+                  </View>
+                )}
+              </View>
             </View>
           ) : null}
-          {notice ? <Text accessibilityRole="alert" style={styles.success}>{notice}</Text> : null}
-          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-          {error && catalog.length === 0 ? <Pressable accessibilityRole="button" onPress={() => void refresh()} style={styles.retry}><Text style={styles.retryLabel}>Retry gifts</Text></Pressable> : null}
+
+          {error ? <View accessibilityRole="alert" style={styles.errorBox}><Text style={styles.error}>{error}</Text></View> : null}
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: !selectedGift || Boolean(sendingSlug) }}
-            disabled={!selectedGift || Boolean(sendingSlug)}
+            accessibilityState={{ disabled: !checkoutEnabled || !selectedGift || Boolean(sendingSlug) }}
+            disabled={!checkoutEnabled || !selectedGift || Boolean(sendingSlug)}
             onPress={() => void send()}
-            style={[styles.sendButton, (!selectedGift || Boolean(sendingSlug)) && styles.sendButtonDisabled]}
+            style={[styles.sendButton, (!checkoutEnabled || !selectedGift || Boolean(sendingSlug)) && styles.sendButtonDisabled]}
           >
-            {sendingSlug ? <ActivityIndicator color={colors.primaryInk} /> : <Text style={styles.sendLabel}>{selectedGift ? `Send ${selectedGift.name} · ${selectedGift.coin_cost} coins` : 'Choose a gift'}</Text>}
+            {sendingSlug ? <ActivityIndicator color={colors.black} /> : <Text style={[styles.sendLabel, !checkoutEnabled && styles.sendLabelDisabled]}>{!checkoutEnabled ? 'GIFTING OPENS AFTER THE FREE BETA' : selectedGift ? `SEND ${selectedGift.name.toUpperCase()} · ${formatUsd(selectedGift.price_usd_cents)}` : 'CHOOSE A GIFT'}</Text>}
           </Pressable>
-          <View style={styles.sheetFooter}>
-            <Text style={styles.footnote}>Gifts are social-only and never convert to cash.</Text>
-            <Pressable accessibilityRole="button" onPress={onClose}><Text style={styles.closeLabel}>Close</Text></Pressable>
-          </View>
+          <Text style={styles.footnote}>{checkoutEnabled ? 'After storefront tax and fees, net proceeds are split equally. Earnings move to their wallet after verification and the refund hold.' : 'Explore the collection now. Sending, payments, earnings, and withdrawals are disabled during the free beta.'}</Text>
         </View>
       </View>
     </Modal>
@@ -138,38 +148,43 @@ export function GiftPicker({
 
 const styles = StyleSheet.create({
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { backgroundColor: 'rgba(3, 4, 8, 0.76)', bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
-  giftSheet: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, borderWidth: 1, gap: spacing.lg, paddingBottom: 34, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  modalBackdrop: { backgroundColor: 'rgba(3, 4, 8, 0.8)', bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  giftSheet: { backgroundColor: colors.background, borderColor: colors.primary, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderTopWidth: 1.5, gap: 12, maxHeight: '92%', paddingBottom: 30, paddingHorizontal: 20, paddingTop: 16 },
   sheetHandle: { alignSelf: 'center', backgroundColor: colors.borderStrong, borderRadius: radius.pill, height: 4, width: 44 },
-  sheetHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
-  sheetTitleCopy: { flex: 1 },
-  sheetTitle: { color: colors.text, fontSize: 23, fontWeight: '900', letterSpacing: -0.7 },
-  sheetSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  sheetBalance: { alignItems: 'center', backgroundColor: colors.warningSoft, borderRadius: radius.md, minWidth: 68, paddingHorizontal: spacing.md, paddingVertical: 8 },
-  sheetBalanceValue: { color: colors.warning, fontSize: 20, fontWeight: '900' },
-  sheetBalanceLabel: { color: colors.textSubtle, fontSize: 12, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase' },
-  loading: { marginVertical: spacing.xl },
-  giftGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  giftChoice: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: radius.lg, borderWidth: 1, gap: 3, paddingHorizontal: spacing.sm, paddingVertical: spacing.md, width: '31%' },
-  giftChoiceSelected: { backgroundColor: colors.signalSoft, borderColor: colors.signal, borderWidth: 2, paddingHorizontal: spacing.sm - 1, paddingVertical: spacing.md - 1 },
-  giftChoiceUnavailable: { opacity: 0.35 },
-  giftChoiceBusy: { backgroundColor: colors.signalSoft, borderColor: colors.signal },
-  giftEmoji: { fontSize: 31, marginBottom: 2 },
-  giftName: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  giftCost: { color: colors.warning, fontSize: 12, fontWeight: '800' },
-  previewRow: { alignItems: 'center', backgroundColor: colors.backgroundRaised, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, padding: spacing.md },
-  previewEmoji: { fontSize: 34 },
+  sheetHeader: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
+  titleBlock: { flex: 1 },
+  eyebrow: { color: colors.warning, fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
+  title: { color: colors.text, fontFamily: fonts.editorial, fontSize: 33, lineHeight: 37, marginTop: 6 },
+  subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  closeButton: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: 8, borderWidth: 1, height: 38, justifyContent: 'center', width: 38 },
+  closeGlyph: { color: colors.text, fontSize: 27, lineHeight: 28 },
+  loading: { marginVertical: spacing.xxl },
+  giftScroller: { marginHorizontal: -spacing.lg },
+  giftRail: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 7 },
+  giftChoice: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 3, borderWidth: 1, gap: 8, padding: 12, width: 126 },
+  giftName: { color: colors.text, fontSize: 12, fontWeight: '900', maxWidth: 100 },
+  price: { fontSize: 14, fontWeight: '900' },
+  seasonTag: { color: colors.textSubtle, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  preview: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 3, borderWidth: 1, flexDirection: 'row', gap: 12, padding: 16 },
   previewCopy: { flex: 1 },
-  previewTitle: { color: colors.text, fontSize: 15, fontWeight: '900' },
-  previewMeta: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
-  success: { color: colors.success, fontSize: 14, fontWeight: '900', textAlign: 'center' },
-  error: { color: colors.danger, fontSize: 12, textAlign: 'center' },
-  retry: { alignItems: 'center', alignSelf: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  retryLabel: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  sendButton: { alignItems: 'center', backgroundColor: colors.signal, borderRadius: radius.md, justifyContent: 'center', minHeight: 52 },
-  sendButtonDisabled: { backgroundColor: colors.surfaceRaised },
-  sendLabel: { color: colors.black, fontSize: 15, fontWeight: '900' },
-  sheetFooter: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
-  footnote: { color: colors.textSubtle, flex: 1, fontSize: 11, lineHeight: 16 },
-  closeLabel: { color: colors.text, fontSize: 13, fontWeight: '900', padding: spacing.sm },
+  giftLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  previewTitle: { fontFamily: fonts.display, color: colors.text, fontSize: 21, fontWeight: '900', letterSpacing: -0.5, marginTop: 2 },
+  tagline: { color: colors.textMuted, fontSize: 11, lineHeight: 15, marginTop: 2 },
+  splitRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  splitCell: { backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: 8, borderWidth: 1, minWidth: 75, paddingHorizontal: 8, paddingVertical: 6 },
+  splitValue: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  earning: { color: colors.signal },
+  splitLabel: { color: colors.textSubtle, fontSize: 10, fontWeight: '900', letterSpacing: 0.8, marginTop: 1 },
+  arrow: { color: colors.warning, fontSize: 17, fontWeight: '900' },
+  bonus: { color: colors.signal, fontSize: 10, fontWeight: '800', lineHeight: 14, marginTop: spacing.sm },
+  betaNote: { backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: 8, borderStyle: 'dashed', borderWidth: 1, marginTop: spacing.md, padding: spacing.sm },
+  betaNoteTitle: { color: colors.warning, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  betaNoteCopy: { color: colors.textMuted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  errorBox: { backgroundColor: colors.dangerSoft, borderColor: colors.danger, borderRadius: 8, borderWidth: 1, padding: spacing.sm },
+  error: { color: colors.text, fontSize: 11, lineHeight: 16, textAlign: 'center' },
+  sendButton: { alignItems: 'center', backgroundColor: colors.signal, borderColor: colors.black, borderRadius: 11, borderWidth: 2, justifyContent: 'center', minHeight: 54, shadowColor: colors.warning, shadowOffset: { height: 4, width: 4 }, shadowOpacity: 1, shadowRadius: 0 },
+  sendButtonDisabled: { backgroundColor: colors.surfaceRaised, shadowOpacity: 0 },
+  sendLabel: { color: colors.primaryInk, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  sendLabelDisabled: { color: colors.textMuted },
+  footnote: { color: colors.textSubtle, fontSize: 10, lineHeight: 15, textAlign: 'center' },
 });

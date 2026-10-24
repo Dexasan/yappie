@@ -1,14 +1,16 @@
-import { useCallback, useState } from 'react';
+import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
+import { Text } from '@/components/Typography';
+import { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { GiftPicker } from '@/components/GiftPicker';
+import { GiftArtwork } from '@/components/GiftArtwork';
 import { Avatar, Card, EmptyState, Muted, Pill, Screen, SectionHeader } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
 import {
-  loadCoinWallet,
+  giftCheckoutEnabled,
   loadProfileGifts,
-  type CoinWallet,
   type ProfileGift,
 } from '@/features/gifts/api';
 import { blockProfile, loadPublicProfile, reportProfile, type PublicProfile } from '@/features/quick-chat/api';
@@ -22,7 +24,7 @@ import {
   type PublicProfilePost,
   type SocialStats,
 } from '@/features/social/api';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, spacing } from '@/theme/tokens';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -42,16 +44,17 @@ export default function PublicProfileScreen() {
   const params = useLocalSearchParams<{ userId: string }>();
   const profileId = first(params.userId);
   const { user } = useSession();
+  const checkoutEnabled = giftCheckoutEnabled();
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [stats, setStats] = useState<SocialStats | null>(null);
   const [posts, setPosts] = useState<PublicProfilePost[]>([]);
   const [following, setFollowing] = useState(false);
-  const [wallet, setWallet] = useState<CoinWallet | null>(null);
   const [profileGifts, setProfileGifts] = useState<ProfileGift[]>([]);
   const [giftModalVisible, setGiftModalVisible] = useState(false);
   const [giftError, setGiftError] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState<'follow' | 'message' | null>(null);
+  const openingMessage = useRef(false);
   const [reported, setReported] = useState(false);
   const [error, setError] = useState('');
   const isOwnProfile = Boolean(user && profileId === user.id);
@@ -86,12 +89,7 @@ export default function PublicProfileScreen() {
     if (!profileId) return;
     setGiftError('');
     try {
-      const [nextWallet, nextGifts] = await Promise.all([
-        loadCoinWallet(),
-        loadProfileGifts(profileId),
-      ]);
-      setWallet(nextWallet);
-      setProfileGifts(nextGifts);
+      setProfileGifts(await loadProfileGifts(profileId));
     } catch (nextError) {
       setGiftError(nextError instanceof Error ? nextError.message : 'Gifts are temporarily unavailable.');
     }
@@ -123,18 +121,20 @@ export default function PublicProfileScreen() {
   };
 
   const openMessage = async () => {
-    if (!profileId || isOwnProfile || working) return;
+    if (!profileId || isOwnProfile || working || openingMessage.current) return;
+    openingMessage.current = true;
     setBusyAction('message');
     setError('');
     try {
       const conversationId = await getOrCreateDirectConversation(profileId);
-      router.push({
+      router.navigate({
         pathname: '/messages/[conversationId]',
         params: { conversationId, partnerId: profileId, partnerName: profileName },
       });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Could not start a conversation.');
     } finally {
+      openingMessage.current = false;
       setBusyAction(null);
     }
   };
@@ -196,8 +196,7 @@ export default function PublicProfileScreen() {
       </View>
 
       <View style={styles.cover}>
-        <View pointerEvents="none" style={styles.coverOrbOne} />
-        <View pointerEvents="none" style={styles.coverOrbTwo} />
+        <PaperSurface variant="oval" color={colors.cobaltSoft} ink={colors.cobalt} /><View pointerEvents="none" style={{position:"absolute",right:15,top:30}}><InkDrawing motif="flower" size={80} color={colors.cobalt} /></View>
         <View style={styles.avatarWrap}><Avatar label={profileName} path={profile.avatar_path} size={100} /></View>
         <Text style={styles.name}>{profileName}</Text>
         <Text style={styles.handle}>@{profile.handle ?? 'member'}</Text>
@@ -252,9 +251,9 @@ export default function PublicProfileScreen() {
           onPress={openGiftPicker}
           style={styles.giftEntry}
         >
-          <View style={styles.giftEntryIcon}><Text style={styles.giftEntryEmoji}>✦</Text></View>
-          <View style={styles.giftEntryCopy}><Text style={styles.giftEntryTitle}>Send a virtual gift</Text><Muted>Make the moment memorable—never paywalled, never cashable.</Muted></View>
-          <View style={styles.balanceMini}><Text style={styles.balanceMiniValue}>{wallet?.balance ?? '—'}</Text><Text style={styles.balanceMiniLabel}>coins</Text></View>
+          <GiftArtwork animated size={48} slug="rose" />
+          <View style={styles.giftEntryCopy}><Text style={styles.giftEntryKicker}>{checkoutEnabled ? 'ANIMATED GIFTS' : 'GIFT LAB · PREVIEW'}</Text><Text style={styles.giftEntryTitle}>{checkoutEnabled ? 'Send something that matters' : 'Peek inside the gift vault'}</Text><Muted>{checkoutEnabled ? 'They receive the gift and half the net proceeds.' : 'Sending and payments are off in the free beta.'}</Muted></View>
+          <Text style={styles.giftArrow}>›</Text>
         </Pressable>
       ) : null}
 
@@ -275,7 +274,7 @@ export default function PublicProfileScreen() {
                   onPress={() => router.push({ pathname: '/people/[userId]', params: { userId: gift.sender_id } })}
                   style={styles.receivedGift}
                 >
-                  <Text style={styles.receivedEmoji}>{gift.gift_emoji}</Text>
+                  <GiftArtwork size={44} slug={gift.gift_slug} />
                   <View style={styles.receivedCopy}><Text style={styles.receivedName}>{gift.gift_name}</Text><Text numberOfLines={1} style={styles.receivedSender}>from {senderName}</Text></View>
                 </Pressable>
               );
@@ -314,10 +313,6 @@ export default function PublicProfileScreen() {
         <GiftPicker
           contextKind="profile"
           onClose={() => setGiftModalVisible(false)}
-          onSent={(result) => {
-            setWallet((current) => current ? { ...current, balance: result.balance, lifetime_spent: current.lifetime_spent + result.coin_cost } : current);
-            void loadProfileGifts(profileId).then(setProfileGifts).catch(() => undefined);
-          }}
           recipientId={profileId}
           recipientName={profileName}
           visible={giftModalVisible}
@@ -333,39 +328,33 @@ const styles = StyleSheet.create({
   topSpacer: { width: 42 },
   backButton: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 50, justifyContent: 'center', width: 50 },
   backGlyph: { color: colors.text, fontSize: 30, fontWeight: '500', lineHeight: 32 },
-  cover: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderColor: colors.border, borderRadius: radius.xl, borderWidth: 1, marginTop: spacing.xl, overflow: 'hidden', padding: spacing.xl },
-  coverOrbOne: { backgroundColor: colors.primaryGlow, borderRadius: 100, height: 180, position: 'absolute', right: -55, top: -90, width: 180 },
-  coverOrbTwo: { backgroundColor: colors.accentGlow, borderRadius: 80, bottom: -70, height: 140, left: -45, position: 'absolute', width: 140 },
+  cover: { alignItems: 'center', marginTop: spacing.xl, padding: 32, paddingTop: 40 },
   avatarWrap: { backgroundColor: colors.primarySoft, borderRadius: 64, marginBottom: spacing.md, padding: 5 },
-  name: { color: colors.text, fontSize: 29, fontWeight: '900', letterSpacing: -1, textAlign: 'center' },
+  name: { color: colors.text, fontFamily: fonts.display, fontSize: 44, lineHeight: 48, letterSpacing: -0.5, textAlign: 'center', textTransform: 'uppercase' },
   handle: { color: colors.link, fontSize: 14, fontWeight: '800', marginTop: 3 },
   metadata: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   locationDot: { color: colors.accent, fontSize: 9 },
-  bio: { color: colors.text, fontSize: 16, lineHeight: 24, marginTop: spacing.xl, textAlign: 'center' },
+  bio: { color: colors.text, fontFamily: fonts.italic, fontSize: 27, lineHeight: 31, marginTop: spacing.xl, textAlign: 'center' },
   stats: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-around', marginVertical: spacing.xl, paddingVertical: spacing.lg },
   stat: { alignItems: 'center', flex: 1, gap: 2 },
-  statNumber: { color: colors.text, fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  statNumber: { fontFamily: fonts.display, color: colors.text, fontSize: 20, fontWeight: '900', textAlign: 'center' },
   statLabel: { color: colors.textSubtle, fontSize: 12, fontWeight: '700' },
   actions: { flexDirection: 'row', gap: spacing.md },
   primaryAction: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: radius.md, flex: 1, justifyContent: 'center', minHeight: 52, paddingHorizontal: spacing.lg },
   primaryActionLabel: { color: colors.primaryInk, fontSize: 14, fontWeight: '900' },
-  followingAction: { backgroundColor: colors.successSoft, borderColor: '#285C49', borderWidth: 1 },
+  followingAction: { backgroundColor: colors.successSoft, borderColor: colors.border, borderWidth: 1 },
   followingLabel: { color: colors.success },
   actionDisabled: { opacity: 0.55 },
   secondaryAction: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: radius.md, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 52, paddingHorizontal: spacing.lg },
   secondaryActionLabel: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  giftEntry: { alignItems: 'center', backgroundColor: colors.warningSoft, borderColor: '#6D5520', borderRadius: radius.lg, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginTop: spacing.md, padding: spacing.md },
-  giftEntryIcon: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderRadius: radius.md, height: 46, justifyContent: 'center', width: 46 },
-  giftEntryEmoji: { color: colors.warning, fontSize: 23, fontWeight: '900' },
+  giftEntry: { alignItems: 'center', backgroundColor: colors.warningSoft, borderColor: colors.warning, borderRadius: 11, borderWidth: 2, flexDirection: 'row', gap: spacing.md, marginTop: spacing.md, padding: spacing.md, shadowColor: colors.accent, shadowOffset: { height: 3, width: 3 }, shadowOpacity: 0.2, shadowRadius: 0 },
   giftEntryCopy: { flex: 1, gap: 2 },
+  giftEntryKicker: { color: colors.warning, fontSize: 7, fontWeight: '900', letterSpacing: 1 },
   giftEntryTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
-  balanceMini: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderRadius: radius.md, minWidth: 58, paddingHorizontal: spacing.sm, paddingVertical: 7 },
-  balanceMiniValue: { color: colors.warning, fontSize: 17, fontWeight: '900' },
-  balanceMiniLabel: { color: colors.textSubtle, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  giftArrow: { color: colors.warning, fontSize: 30, fontWeight: '900' },
   error: { color: colors.danger, fontSize: 13, marginTop: spacing.md, textAlign: 'center' },
   giftHistory: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   receivedGift: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, padding: spacing.md, width: '48%' },
-  receivedEmoji: { fontSize: 28 },
   receivedCopy: { flex: 1 },
   receivedName: { color: colors.text, fontSize: 12, fontWeight: '900' },
   receivedSender: { color: colors.textSubtle, fontSize: 12, marginTop: 2 },

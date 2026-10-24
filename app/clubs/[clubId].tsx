@@ -1,8 +1,11 @@
+import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
+import { Text, TextInput } from '@/components/Typography';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
 import { Avatar, Card, EmptyState, Heading, Muted, Pill, PrimaryButton, Screen, SectionHeader } from '@/components/ui';
+import { ClubCover } from '@/components/ClubCover';
 import { useSession } from '@/context/SessionContext';
 import {
   createClubPost,
@@ -19,7 +22,10 @@ import {
 } from '@/features/clubs/api';
 import { setPostLiked } from '@/features/feed/api';
 import { chooseClubAvatar, clubAvatarPublicUrl, uploadClubAvatar } from '@/features/clubs/avatar';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, spacing } from '@/theme/tokens';
+import { ClubSessions } from '@/components/ClubSessions';
+import { ContentMenu } from '@/components/ContentMenu';
+import { useDraft } from '@/lib/use-draft';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -41,7 +47,7 @@ export default function ClubDetailScreen() {
   const [club, setClub] = useState<ClubDetail | null>(null);
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [posts, setPosts] = useState<ClubPost[]>([]);
-  const [postBody, setPostBody] = useState('');
+  const [postBody, setPostBody] = useDraft(user?.id, `club:${clubId}`);
   const [roomTitle, setRoomTitle] = useState('');
   const [showRoomForm, setShowRoomForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -76,7 +82,7 @@ export default function ClubDetailScreen() {
   const canHost = useMemo(() => Boolean(
     club?.is_member && (club.allow_member_rooms || club.member_role === 'owner' || club.member_role === 'moderator'),
   ), [club]);
-  const canEditImage = club?.member_role === 'owner' || club?.member_role === 'moderator';
+  const canEditImage = Boolean(user && club?.owner_id === user.id);
 
   const changeClubImage = async () => {
     if (!clubId || !club || !canEditImage || imageBusy) return;
@@ -206,9 +212,10 @@ export default function ClubDetailScreen() {
         <Pill label={club.topic} tone="accent" />
       </View>
 
-      <Pressable accessibilityLabel={canEditImage ? 'Change Club picture' : `${club.name} picture`} disabled={!canEditImage || imageBusy} onPress={() => void changeClubImage()} style={styles.heroImageAction}>
-        <Avatar imageUrl={clubAvatarPublicUrl(club.avatar_path)} label={club.name} size={76} />
-        {canEditImage ? <View style={styles.imageEditBadge}>{imageBusy ? <ActivityIndicator color={colors.primary} size="small" /> : <Text style={styles.imageEditGlyph}>+</Text>}</View> : null}
+      <View style={styles.clubHero}>
+      <Pressable accessibilityLabel={canEditImage ? 'Change Club cover' : `${club.name} cover`} disabled={!canEditImage || imageBusy} onPress={() => void changeClubImage()} style={styles.heroImageAction}>
+        <ClubCover height={226} label={club.name} uri={clubAvatarPublicUrl(club.avatar_path)} width="100%" />
+        {canEditImage ? <View style={styles.imageEditBadge}>{imageBusy ? <ActivityIndicator color={colors.primaryInk} size="small" /> : <><Text style={styles.imageEditGlyph}>＋</Text><Text style={styles.imageEditText}>EDIT COVER</Text></>}</View> : null}
       </Pressable>
       <Heading compact>{club.name}</Heading>
       <Muted style={styles.description}>{club.description}</Muted>
@@ -223,6 +230,7 @@ export default function ClubDetailScreen() {
         ) : <Text style={styles.ownerName}>Community</Text>}
       </View>
 
+      </View>
       <View style={styles.primaryActions}>
         <View style={styles.actionFlex}>
           <PrimaryButton
@@ -264,6 +272,7 @@ export default function ClubDetailScreen() {
         </Card>
       ) : null}
 
+      {clubId ? <ClubSessions clubId={clubId} canHost={canHost} isMember={club.is_member} /> : null}
       <SectionHeader title="Club conversation" />
       {club.is_member ? (
         <Card style={styles.composer}>
@@ -305,6 +314,7 @@ export default function ClubDetailScreen() {
               </Pressable>
               <Text style={styles.postBody}>{post.body}</Text>
               <View style={styles.postActions}>
+                <ContentMenu id={post.post_id} authorId={post.author_id} onChanged={() => void refresh()} />
                 <Pressable onPress={() => void toggleLike(post)} style={[styles.postAction, post.liked_by_me && styles.likedAction]}>
                   <Text style={[styles.postActionLabel, post.liked_by_me && styles.likedLabel]}>{post.liked_by_me ? '♥' : '♡'} {post.like_count}</Text>
                 </Pressable>
@@ -348,9 +358,11 @@ const styles = StyleSheet.create({
   backButton: { alignItems: 'center', flexDirection: 'row', gap: 4, paddingVertical: spacing.sm },
   backGlyph: { color: colors.text, fontSize: 28, lineHeight: 28 },
   backLabel: { color: colors.text, fontSize: 14, fontWeight: '800' },
-  heroImageAction: { alignSelf: 'flex-start', marginBottom: spacing.md, marginTop: spacing.xl, position: 'relative' },
-  imageEditBadge: { alignItems: 'center', backgroundColor: colors.signal, borderColor: colors.background, borderRadius: 16, borderWidth: 3, bottom: -3, height: 32, justifyContent: 'center', position: 'absolute', right: -3, width: 32 },
-  imageEditGlyph: { color: colors.primary, fontSize: 21, fontWeight: '900', lineHeight: 23 },
+  clubHero: { gap: spacing.md, marginTop: spacing.xl },
+  heroImageAction: { marginBottom: spacing.sm, position: 'relative', transform: [{ rotate: '-1deg' }], width: '100%' },
+  imageEditBadge: { alignItems: 'center', backgroundColor: colors.signal, borderColor: colors.background, borderRadius: 4, borderWidth: 3, bottom: 10, flexDirection: 'row', gap: 5, minHeight: 38, paddingHorizontal: 11, position: 'absolute', right: 10 },
+  imageEditGlyph: { color: colors.black, fontSize: 17, fontWeight: '900', lineHeight: 20 },
+  imageEditText: { color: colors.black, fontFamily: fonts.display, fontSize: 13, letterSpacing: 0.8 },
   description: { fontSize: 15, lineHeight: 23, marginTop: spacing.md },
   statsRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.lg },
   memberCount: { color: colors.text, fontSize: 13, fontWeight: '900' },
@@ -360,13 +372,13 @@ const styles = StyleSheet.create({
   ownerName: { color: colors.link, fontSize: 13, fontWeight: '800' },
   primaryActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xl },
   actionFlex: { flex: 1 },
-  liveButton: { alignItems: 'center', backgroundColor: colors.accentSoft, borderColor: '#603128', borderRadius: radius.pill, borderWidth: 1, justifyContent: 'center', minWidth: 104, paddingHorizontal: spacing.md },
+  liveButton: { alignItems: 'center', backgroundColor: colors.accentSoft, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, justifyContent: 'center', minWidth: 104, paddingHorizontal: spacing.md },
   liveButtonText: { color: colors.accent, fontSize: 13, fontWeight: '900' },
   error: { color: colors.danger, fontSize: 13, marginTop: spacing.lg, textAlign: 'center' },
   liveCard: { backgroundColor: colors.accentSoft, gap: spacing.lg, marginTop: spacing.xl },
   liveTop: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   liveClub: { color: colors.textMuted, fontSize: 13, fontWeight: '800', textTransform: 'uppercase' },
-  liveTitle: { color: colors.text, fontSize: 21, fontWeight: '900', lineHeight: 27 },
+  liveTitle: { fontFamily: fonts.display, color: colors.text, fontSize: 21, fontWeight: '900', lineHeight: 27 },
   roomForm: { gap: spacing.md, marginTop: spacing.lg },
   cardTitle: { color: colors.text, fontSize: 16, fontWeight: '900' },
   input: { backgroundColor: colors.surfaceSoft, borderColor: colors.borderStrong, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 52, paddingHorizontal: spacing.lg },
@@ -378,7 +390,7 @@ const styles = StyleSheet.create({
   postButton: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: 10 },
   postButtonLabel: { color: colors.primaryInk, fontSize: 12, fontWeight: '900' },
   disabled: { opacity: 0.45 },
-  joinPrompt: { backgroundColor: colors.cobaltSoft, borderColor: '#34458F', borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: spacing.lg },
+  joinPrompt: { backgroundColor: colors.cobaltSoft, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, gap: 4, padding: spacing.lg },
   joinPromptTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
   joinPromptCopy: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
   postList: { gap: spacing.md, marginTop: spacing.md },

@@ -1,10 +1,12 @@
+import { InkDrawing } from '@/components/InkArtwork';
+import { Text } from '@/components/Typography';
 import { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar, Card, EmptyState, Muted, Pill, Screen, SectionHeader } from '@/components/ui';
 import { loadSafetySettings, unblockProfile, updateMessagePermission, type BlockedProfile, type MessagePermission } from '@/features/safety/api';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, spacing } from '@/theme/tokens';
 
 const permissionChoices: Array<{ description: string; label: string; value: MessagePermission }> = [
   { value: 'everyone', label: 'Everyone', description: 'Any unblocked member can start a conversation.' },
@@ -75,12 +77,6 @@ export default function SafetySettingsScreen() {
         <View style={styles.topSpacer} />
       </View>
 
-      <View style={styles.hero}>
-        <View style={styles.heroIcon}><Text style={styles.heroGlyph}>✓</Text></View>
-        <Text style={styles.heroTitle}>You control the door.</Text>
-        <Muted style={styles.heroCopy}>Set who can reach your inbox and revisit accounts you have blocked.</Muted>
-      </View>
-
       <SectionHeader title="Who can message me" />
       <Card style={styles.choiceCard}>
         {permissionChoices.map((choice, index) => {
@@ -135,11 +131,9 @@ const styles = StyleSheet.create({
   backGlyph: { color: colors.text, fontSize: 30, fontWeight: '500', lineHeight: 32 },
   topTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '900', letterSpacing: 0.7, textTransform: 'uppercase' },
   topSpacer: { width: 42 },
-  hero: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderColor: colors.border, borderRadius: radius.xl, borderWidth: 1, gap: spacing.sm, marginTop: spacing.xl, padding: spacing.xl },
-  heroIcon: { alignItems: 'center', backgroundColor: colors.successSoft, borderRadius: radius.pill, height: 62, justifyContent: 'center', marginBottom: spacing.xs, width: 62 },
-  heroGlyph: { color: colors.success, fontSize: 28, fontWeight: '900' },
-  heroTitle: { color: colors.text, fontSize: 24, fontWeight: '900', letterSpacing: -0.65 },
-  heroCopy: { maxWidth: 290, textAlign: 'center' },
+  hero: { alignItems: 'flex-start', borderBottomColor: colors.primary, borderBottomWidth: 1.5, gap: 8, marginTop: 24, paddingBottom: 24 },
+  heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 42, lineHeight: 46, textTransform: 'uppercase' },
+  heroCopy: { maxWidth: 340, textAlign: 'left' },
   choiceCard: { backgroundColor: colors.surfaceSoft, paddingVertical: 0 },
   choice: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.lg },
   choiceBorder: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
@@ -147,7 +141,7 @@ const styles = StyleSheet.create({
   radioSelected: { borderColor: colors.primary },
   radioDot: { backgroundColor: colors.primary, borderRadius: 5, height: 10, width: 10 },
   choiceCopy: { flex: 1, gap: 2 },
-  choiceTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  choiceTitle: { color: colors.text, fontFamily: fonts.editorial, fontSize: 23 },
   error: { color: colors.danger, fontSize: 13, marginTop: spacing.md, textAlign: 'center' },
   loading: { marginTop: spacing.xl },
   blockList: { gap: spacing.sm },
@@ -157,6 +151,6 @@ const styles = StyleSheet.create({
   unblockButton: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.md, paddingVertical: 8 },
   unblockLabel: { color: colors.text, fontSize: 14, fontWeight: '900' },
   inactive: { opacity: 0.5 },
-  noteCard: { backgroundColor: colors.cobaltSoft, borderColor: '#34458F', gap: spacing.xs, marginTop: spacing.xl },
-  noteTitle: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  noteCard: { backgroundColor: colors.cobaltSoft, borderColor: colors.border, gap: spacing.xs, marginTop: spacing.xl },
+  noteTitle: { color: colors.text, fontFamily: fonts.italic, fontSize: 27 },
 });

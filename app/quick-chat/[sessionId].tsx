@@ -1,23 +1,17 @@
+import { Text, TextInput } from '@/components/Typography';
 import { useEffect, useRef, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GiftPicker } from '@/components/GiftPicker';
+import { GiftArtwork } from '@/components/GiftArtwork';
 import { Avatar, Muted } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
+import { giftCheckoutEnabled } from '@/features/gifts/api';
 import {
   blockProfile,
+  heartbeatQuickChat,
   leaveQuickChat,
   loadConversationMessages,
   loadPublicProfile,
@@ -34,12 +28,18 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function containsWord(value: string) {
+  return /[\p{L}\p{N}]/u.test(value);
+}
+
 export default function QuickChatConversationScreen() {
-  const params = useLocalSearchParams<{ sessionId: string; conversationId: string; partnerId: string }>();
+  const params = useLocalSearchParams<{ sessionId: string; conversationId: string; partnerId: string; topic?: string }>();
   const sessionId = first(params.sessionId);
   const conversationId = first(params.conversationId);
   const partnerId = first(params.partnerId);
+  const topic = first(params.topic);
   const { user } = useSession();
+  const checkoutEnabled = giftCheckoutEnabled();
   const [messages, setMessages] = useState<Message[]>([]);
   const [partner, setPartner] = useState<PublicProfile | null>(null);
   const [draft, setDraft] = useState('');
@@ -76,6 +76,28 @@ export default function QuickChatConversationScreen() {
   }, [conversationId, partnerId]);
 
   useEffect(() => {
+    if (!sessionId) return;
+    let active = true;
+    const heartbeat = async () => {
+      try {
+        const connected = await heartbeatQuickChat(sessionId);
+        if (active && !connected) {
+          setError('This match ended because someone went offline.');
+          router.replace('/(tabs)/quick-chat');
+        }
+      } catch (nextError) {
+        if (active) setError(nextError instanceof Error ? nextError.message : 'Could not keep this match connected.');
+      }
+    };
+    void heartbeat();
+    const timer = setInterval(() => void heartbeat(), 10_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
     if (messages.length) listRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
 
@@ -97,7 +119,7 @@ export default function QuickChatConversationScreen() {
     }
   };
 
-  const endChat = async (reason: 'left' | 'blocked' | 'reported') => {
+  const endChat = async (reason: 'left' | 'skip' | 'blocked' | 'reported') => {
     if (sessionId) await leaveQuickChat(sessionId, reason);
     router.replace('/(tabs)/quick-chat');
   };
@@ -150,10 +172,19 @@ export default function QuickChatConversationScreen() {
   };
 
   const partnerName = partner?.display_name || (partner?.handle ? `@${partner.handle}` : 'Quick Chat');
+  const canSkip = messages.some((message) => containsWord(message.body));
+
+  const showOptions = () => {
+    Alert.alert('Conversation options', undefined, [
+      { text: 'Report', onPress: confirmReport },
+      { text: 'Block', style: 'destructive', onPress: confirmBlock },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
         <View style={styles.header}>
           <Pressable accessibilityLabel="Leave conversation" onPress={() => void endChat('left')} style={styles.headerAction}>
             <Text style={styles.headerActionText}>‹</Text>
@@ -168,29 +199,36 @@ export default function QuickChatConversationScreen() {
             <Avatar label={partnerName} path={partner?.avatar_path} size={42} />
             <View style={styles.headerIdentity}>
               <Text style={styles.partnerName}>{partnerName}</Text>
-              <Muted>Connected now · View profile</Muted>
+              <Muted>{topic ? `Matched on ${topic}` : 'Connected now'}</Muted>
             </View>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={confirmReport} style={styles.textAction}>
-            <Text style={styles.textActionLabel}>Report</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={confirmBlock} style={styles.textAction}>
-            <Text style={styles.blockLabel}>Block</Text>
+          {canSkip ? (
+            <Pressable accessibilityLabel="Skip to another match" accessibilityRole="button" onPress={() => void endChat('skip')} style={styles.skipButton}>
+              <Text style={styles.skipLabel}>Skip</Text>
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityLabel="Conversation options" accessibilityRole="button" onPress={showOptions} style={styles.moreButton}>
+            <Text style={styles.moreLabel}>•••</Text>
           </Pressable>
         </View>
 
-        <View style={styles.keepRow}>
-          <Text style={styles.keepCopy}>Want to talk again later?</Text>
-          <Pressable accessibilityRole="button" disabled={keeping || kept} onPress={() => void keepInTouch()} style={[styles.keepButton, kept && styles.keepButtonDone]}>
-            <Text style={styles.keepButtonText}>{kept ? 'Saved ✓' : keeping ? 'Saving…' : 'Follow + keep chat'}</Text>
-          </Pressable>
-        </View>
+        {canSkip ? (
+          <View style={styles.keepRow}>
+            <Text style={styles.keepCopy}>Keep this chat?</Text>
+            <Pressable accessibilityRole="button" disabled={keeping || kept} onPress={() => void keepInTouch()} style={[styles.keepButton, kept && styles.keepButtonDone]}>
+              <Text style={styles.keepButtonText}>{kept ? 'Saved ✓' : keeping ? 'Saving…' : 'Follow + save'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <FlatList
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.messages}
           data={messages}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.id}
-          ListEmptyComponent={<Text style={styles.empty}>Say hello. Keep it kind.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{topic ? `You both picked ${topic}. Send a message.` : 'Send a message.'}</Text>}
           ref={listRef}
           renderItem={({ item }) => {
             const own = item.sender_id === user?.id;
@@ -204,8 +242,9 @@ export default function QuickChatConversationScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.composer}>
-          <Pressable accessibilityLabel="Send a virtual gift" accessibilityRole="button" onPress={() => setGiftPickerVisible(true)} style={styles.giftButton}>
-            <Text style={styles.giftGlyph}>✦</Text>
+          <Pressable accessibilityLabel={checkoutEnabled ? 'Send a gift' : 'Preview future gifts'} accessibilityRole="button" onPress={() => setGiftPickerVisible(true)} style={styles.giftButton}>
+            <GiftArtwork size={38} slug="gift_vault" />
+            {!checkoutEnabled ? <Text style={styles.giftLabBadge}>LAB</Text> : null}
           </Pressable>
           <TextInput
             accessibilityLabel="Message"
@@ -244,34 +283,35 @@ export default function QuickChatConversationScreen() {
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   container: { flex: 1 },
-  header: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  header: { alignItems: 'center', backgroundColor: colors.background, borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 14 },
   headerAction: { alignItems: 'center', height: 48, justifyContent: 'center', width: 40 },
   headerActionText: { color: colors.text, fontSize: 36, fontWeight: '300', lineHeight: 38 },
   headerIdentity: { flex: 1 },
   profileLink: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm },
   partnerName: { color: colors.text, fontSize: 15, fontWeight: '900', letterSpacing: -0.2 },
-  textAction: { paddingHorizontal: 5, paddingVertical: spacing.sm },
-  textActionLabel: { color: colors.warning, fontSize: 14, fontWeight: '800' },
-  blockLabel: { color: colors.danger, fontSize: 14, fontWeight: '800' },
-  keepRow: { alignItems: 'center', backgroundColor: colors.signalSoft, borderBottomColor: '#3B5421', borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  keepCopy: { color: colors.textMuted, fontSize: 12 },
-  keepButton: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 8 },
+  skipButton: { backgroundColor: colors.accentSoft, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 13 },
+  skipLabel: { color: colors.accent, fontSize: 13, fontWeight: '900' },
+  moreButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
+  moreLabel: { color: colors.textMuted, fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  keepRow: { alignItems: 'center', backgroundColor: colors.cobaltSoft, borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  keepCopy: { color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 18 },
+  keepButton: { backgroundColor: colors.surfaceRaised, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 12 },
   keepButtonDone: { backgroundColor: colors.successSoft },
-  keepButtonText: { color: colors.primaryInk, fontSize: 14, fontWeight: '800' },
+  keepButtonText: { color: colors.text, fontSize: 12, fontWeight: '700' },
   messages: { flexGrow: 1, gap: spacing.sm, justifyContent: 'flex-end', padding: spacing.lg },
   empty: { color: colors.textMuted, fontSize: 13, marginBottom: spacing.xl, textAlign: 'center' },
-  bubble: { borderRadius: radius.md, maxWidth: '82%', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  ownBubble: { alignSelf: 'flex-end', backgroundColor: colors.primary },
-  theirBubble: { alignSelf: 'flex-start', backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth },
-  messageText: { color: colors.text, fontSize: 15, lineHeight: 21 },
+  bubble: { borderRadius: 14, maxWidth: '82%', paddingHorizontal: 18, paddingVertical: 13 },
+  ownBubble: { alignSelf: 'flex-end', backgroundColor: colors.primary, borderBottomRightRadius: 2 },
+  theirBubble: { alignSelf: 'flex-start', backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderBottomLeftRadius: 2 },
+  messageText: { color: colors.text, fontSize: 16, lineHeight: 24 },
   ownMessageText: { color: colors.primaryInk },
   error: { color: colors.danger, fontSize: 12, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, textAlign: 'center' },
-  composer: { alignItems: 'flex-end', backgroundColor: colors.surfaceSoft, borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
-  giftButton: { alignItems: 'center', backgroundColor: colors.warningSoft, borderColor: '#6D5520', borderRadius: 27, borderWidth: 1, height: 54, justifyContent: 'center', width: 54 },
-  giftGlyph: { color: colors.warning, fontSize: 20, fontWeight: '900' },
-  input: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 27, borderWidth: 1, color: colors.text, flex: 1, fontSize: 17, maxHeight: 132, minHeight: 54, paddingHorizontal: spacing.lg, paddingVertical: 14 },
-  sendButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 27, height: 54, justifyContent: 'center', width: 54 },
-  sendPressed: { backgroundColor: colors.primaryPressed },
+  composer: { alignItems: 'flex-end', backgroundColor: colors.background, borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, padding: 12 },
+  giftButton: { alignItems: 'center', backgroundColor: colors.surface, borderRadius: 8, height: 48, justifyContent: 'center', width: 44 },
+  giftLabBadge: { backgroundColor: colors.warningSoft, borderColor: colors.borderStrong, borderRadius: 5, borderWidth: 1, color: colors.warning, fontSize: 6, fontWeight: '900', letterSpacing: 0.5, paddingHorizontal: 4, paddingVertical: 2, position: 'absolute', right: -3, top: -5 },
+  input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, color: colors.text, flex: 1, fontSize: 15, maxHeight: 132, minHeight: 48, paddingHorizontal: 16, paddingVertical: 12 },
+  sendButton: { alignItems: 'center', backgroundColor: colors.accent, borderRadius: 8, height: 48, justifyContent: 'center', width: 48 },
+  sendPressed: { backgroundColor: colors.primaryPressed, transform: [{ scale: 0.96 }] },
   sendDisabled: { opacity: 0.4 },
-  sendLabel: { color: colors.primaryInk, fontSize: 24, fontWeight: '900' },
+  sendLabel: { color: colors.primaryInk, fontSize: 24, fontWeight: '800' },
 });

@@ -1,8 +1,10 @@
+import { InkDrawing } from '@/components/InkArtwork';
+import { Text } from '@/components/Typography';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Card, Eyebrow, Heading, Muted, Screen } from '@/components/ui';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, spacing } from '@/theme/tokens';
 
 type LegalDocument = 'terms' | 'privacy' | 'community-guidelines';
 
@@ -20,7 +22,8 @@ const documents: Record<LegalDocument, {
       { heading: 'Who can use the app', body: 'You must be at least 18 years old, provide accurate account information, and be legally able to accept these terms. One person should control each account.' },
       { heading: 'Your conduct', body: 'You may meet strangers, publish posts, join clubs, and message people. You may not harass, exploit, threaten, impersonate, spam, or use the service for illegal activity. The Community Guidelines are part of these terms.' },
       { heading: 'Your content', body: 'You keep ownership of content you create. You give the service permission to store, process, display, and distribute it only as needed to operate and improve the app. You are responsible for what you publish.' },
-      { heading: 'Coins and gifts', body: 'Coins and virtual gifts are entertainment features. They have no cash value, cannot be withdrawn, and do not create a financial claim against another user or the service.' },
+      { heading: 'Gift preview', body: 'Paid gifting, earnings, and withdrawals are not available in the free beta. Gift artwork and catalogue entries are illustrative previews only: they cannot be purchased, sent, redeemed, or exchanged for money. If paid gifting launches later, updated terms and final storefront pricing will be shown before the first purchase.' },
+      { heading: 'Future paid features', body: 'Previewing a planned gift does not create a balance, payout right, Premium entitlement, or promise that the feature will launch. Any future purchase and payout program will require separate eligibility rules, verification, supported-country checks, and your acceptance of the terms that apply at that time.' },
       { heading: 'Moderation and access', body: 'We may remove content, restrict features, suspend accounts, or preserve evidence when needed for safety, legal compliance, or service integrity. You can report users, posts, messages, and rooms from inside the app.' },
       { heading: 'Beta availability', body: 'The app is provided during an early beta and may change, experience downtime, or lose experimental data. Do not rely on it for emergencies or essential communications.' },
     ],
@@ -34,7 +37,10 @@ const documents: Record<LegalDocument, {
       { heading: 'Public profile and content', body: 'Your display name, username, country code, languages, bio, posts, replies, follower relationships, club activity, and received gifts can be visible to other authenticated users.' },
       { heading: 'Conversations and live rooms', body: 'Messages and room participation are processed to deliver the features, enforce blocks, investigate reports, and maintain service reliability. Live audio is transmitted through the configured realtime provider and is not designed as a recording feature.' },
       { heading: 'Safety records', body: 'Blocks, reports, moderation actions, and limited technical logs may be retained to prevent abuse and investigate incidents. Blocking hides interactions between the affected accounts.' },
-      { heading: 'Service providers', body: 'The beta relies on infrastructure providers including Supabase for authentication and data services, Expo for application delivery, and Cloudflare for live audio. They process data only to provide their services under their own security obligations.' },
+      { heading: 'Discovery and notifications', body: 'We use your matching interests, profile languages, follows, club topics, and likes to order Discover posts. Your matching interests are kept privately. If you enable notifications, we store a device delivery token and your alert preferences. Lock-screen message previews are off by default. You can change these choices in Notification settings.' },
+      { heading: 'Usage measurement and drafts', body: 'We record limited events such as app visits, successful matches, posts, replies, and technical failures to understand whether the app works. These events do not contain message bodies or typed content and are kept for up to 90 days. Unsent drafts are stored on your device separately for each account.' },
+      { heading: 'Payments and payouts', body: 'The free beta does not collect gift-payment, payout, tax, or bank-account information because purchases and withdrawals are disabled. If those features are activated later, this notice will be updated before that data is collected.' },
+      { heading: 'Service providers', body: 'The beta relies on infrastructure providers including Supabase for authentication and data services, Expo for application delivery, and Cloudflare for live audio. They process data to provide their services under their own security obligations.' },
       { heading: 'Your choices', body: 'You can edit profile details, control who may start a direct message, block accounts, change your password, and permanently delete your account inside the app. Formal privacy-request contact details must be added before a public store launch.' },
     ],
   },
@@ -68,11 +74,11 @@ export default function LegalScreen() {
       <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
         <Text style={styles.backGlyph}>‹</Text><Text style={styles.backLabel}>Back</Text>
       </Pressable>
-      <View style={styles.hero}>
+      <View style={styles.hero}><InkDrawing motif="book" size={86} color={colors.cobalt} />
         <Eyebrow>{document.eyebrow}</Eyebrow>
         <Heading compact>{document.title}</Heading>
         <Muted>{document.summary}</Muted>
-        <Text style={styles.updated}>Beta revision · 21 August 2026</Text>
+        <Text style={styles.updated}>Beta revision · 5 September 2026</Text>
       </View>
 
       <View style={styles.tabs}>
@@ -105,6 +111,7 @@ export default function LegalScreen() {
         ))}
       </View>
       <Text style={styles.footer}>These beta policies will be reviewed and expanded before public store distribution.</Text>
+      <Pressable accessibilityRole="link" onPress={() => router.push('/legal/artwork')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'center' }}><Text style={{ color: colors.link, fontSize: 13 }}>Artwork credits & licenses</Text></Pressable>
     </Screen>
   );
 }
@@ -125,7 +132,7 @@ const styles = StyleSheet.create({
   sectionNumber: { alignItems: 'center', backgroundColor: colors.primarySoft, borderRadius: radius.pill, height: 30, justifyContent: 'center', width: 30 },
   sectionNumberText: { color: colors.text, fontSize: 13, fontWeight: '900' },
   sectionCopy: { flex: 1, gap: spacing.sm },
-  sectionHeading: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  sectionHeading: { color: colors.text, fontFamily: fonts.editorial, fontSize: 25, lineHeight: 29 },
   sectionBody: { color: colors.textMuted, fontSize: 13, lineHeight: 20 },
   footer: { color: colors.textSubtle, fontSize: 12, lineHeight: 18, marginTop: spacing.xl, textAlign: 'center' },
 });

@@ -6,33 +6,32 @@ function getCallbackParams(url: string) {
   const fragment = new URLSearchParams(parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash);
 
   return {
-    accessToken: query.get('access_token') ?? fragment.get('access_token'),
     code: query.get('code') ?? fragment.get('code'),
     errorDescription: query.get('error_description') ?? fragment.get('error_description'),
-    refreshToken: query.get('refresh_token') ?? fragment.get('refresh_token'),
+    intent: query.get('intent') ?? fragment.get('intent'),
     type: query.get('type') ?? fragment.get('type'),
   };
 }
 
-export async function handleAuthCallbackUrl(url: string) {
-  if (!supabase || !url.includes('/auth/callback')) return null;
+export const authCallbackUrl = 'socialdiscovery://auth/callback';
 
-  const { accessToken, code, errorDescription, refreshToken, type } = getCallbackParams(url);
+function isExpectedCallback(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'socialdiscovery:' && parsed.hostname === 'auth' && parsed.pathname === '/callback';
+  } catch {
+    return false;
+  }
+}
+
+export async function handleAuthCallbackUrl(url: string) {
+  if (!supabase || !isExpectedCallback(url)) return null;
+
+  const { code, errorDescription, intent, type } = getCallbackParams(url);
   if (errorDescription) throw new Error(errorDescription);
 
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw error;
-    return type;
-  }
-
-  if (accessToken && refreshToken) {
-    const { error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    if (error) throw error;
-  }
-
-  return type;
+  if (!code) return null;
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw error;
+  return type ?? intent;
 }

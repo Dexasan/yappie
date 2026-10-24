@@ -34,6 +34,7 @@ export async function isFollowingProfile(followerId: string, followedId: string)
 export async function getOrCreateDirectConversation(otherUserId: string) {
   const { data, error } = await client().rpc('get_or_create_direct_conversation', { other_user_id: otherUserId });
   if (error) throw error;
+  if (typeof data !== 'string' || !data) throw new Error('The conversation could not be opened. Please try again.');
   return data;
 }
 
@@ -66,6 +67,12 @@ export type UpdateProfileInput = {
   handle: string;
   languages: string[];
 };
+
+export async function isHandleAvailable(handle: string) {
+  const { data, error } = await client().rpc('is_handle_available', { candidate_handle: handle });
+  if (error) throw error;
+  return Boolean(data);
+}
 
 export async function updateOwnProfile(userId: string, input: UpdateProfileInput) {
   const { error } = await client()

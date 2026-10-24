@@ -1,11 +1,14 @@
-import { Redirect, router } from 'expo-router';
+import { Text, TextInput } from '@/components/Typography';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BrandLockup } from '@/components/Brand';
-import { Card, Pill, PrimaryButton, Screen, SignalBars } from '@/components/ui';
+import { ConversationArtwork } from '@/components/ConversationArtwork';
+import { Card, Pill, PrimaryButton, Screen } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { colors, fonts, radius, spacing } from '@/theme/tokens';
+import { safeReturnTarget } from '@/lib/navigation-target';
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -18,6 +21,7 @@ function readableAuthError(error: unknown) {
 }
 
 export default function AuthScreen() {
+  const { returnTo } = useLocalSearchParams<{returnTo?: string}>();
   const { isConfigured, isLoading, onboardingComplete, requestPasswordReset, signIn, signUp, user } = useSession();
   const [mode, setMode] = useState<AuthMode>('sign-up');
   const [email, setEmail] = useState('');
@@ -27,10 +31,11 @@ export default function AuthScreen() {
   const [notice, setNotice] = useState('');
 
   if (!isLoading && user) {
-    return <Redirect href={onboardingComplete ? '/(tabs)/quick-chat' : '/onboarding'} />;
+    return <Redirect href={onboardingComplete ? safeReturnTarget(returnTo) ?? '/(tabs)/quick-chat' : '/onboarding'} />;
   }
 
-  const canSubmit = isConfigured && email.trim().includes('@') && password.length >= 8 && !submitting;
+  const strongSignUpPassword = password.length >= 10 && /[A-Za-z]/.test(password) && /\d/.test(password);
+  const canSubmit = isConfigured && email.trim().includes('@') && (mode === 'sign-up' ? strongSignUpPassword : password.length > 0) && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -70,7 +75,7 @@ export default function AuthScreen() {
     setNotice('');
     try {
       await requestPasswordReset(email.trim().toLowerCase());
-      setNotice('Password reset link sent. Open it on this Android device to choose a new password.');
+      setNotice('Password reset link sent. Open it on this device to choose a new password.');
     } catch (nextError) {
       setError(readableAuthError(nextError));
     } finally {
@@ -85,15 +90,15 @@ export default function AuthScreen() {
         <Pill label="Early access" tone="accent" />
       </View>
       <View style={styles.intro}>
-        <View style={styles.introTop}><Text style={styles.introEyebrow}>{mode === 'sign-up' ? 'STRANGERS, NOT SWIPES' : 'WELCOME BACK'}</Text><SignalBars /></View>
-        <Text style={styles.introTitle}>{mode === 'sign-up' ? 'Your next favorite person is currently a stranger.' : 'The room kept talking.'}</Text>
-        <Text style={styles.introCopy}>Random chats, public thoughts, and live audio. No awkward matching ritual. Just show up and say something.</Text>
+        <ConversationArtwork compact />
+        <Text style={styles.introEyebrow}>{mode === 'sign-up' ? 'GOOD COMPANY STARTS HERE' : 'WELCOME BACK'}</Text>
+        <Text style={styles.introTitle}>{mode === 'sign-up' ? 'GOOD COMPANY.\nGREAT STORIES.' : 'BACK FOR\nANOTHER HELLO.'}</Text>
       </View>
 
       <View style={styles.promiseRow}>
-        <View style={[styles.promise, styles.promiseSignal]}><Text style={styles.promiseValue}>∞</Text><Text style={styles.promiseLabel}>No limits</Text></View>
-        <View style={[styles.promise, styles.promiseCobalt]}><Text style={[styles.promiseValue, styles.promiseValueLight]}>1 tap</Text><Text style={[styles.promiseLabel, styles.promiseLabelLight]}>Meet someone</Text></View>
-        <View style={[styles.promise, styles.promiseOrange]}><Text style={styles.promiseValue}>Global</Text><Text style={styles.promiseLabel}>By default</Text></View>
+        <View style={[styles.promise, styles.promiseSignal]}><Text style={styles.promiseValue}>1:1</Text><Text style={styles.promiseLabel}>Real chats</Text></View>
+        <View style={[styles.promise, styles.promiseCobalt]}><Text style={[styles.promiseValue, styles.promiseValueLight]}>Clubs</Text><Text style={[styles.promiseLabel, styles.promiseLabelLight]}>Your people</Text></View>
+        <View style={[styles.promise, styles.promiseOrange]}><Text style={styles.promiseValue}>Live</Text><Text style={styles.promiseLabel}>Open calls</Text></View>
       </View>
 
       <Card style={styles.form}>
@@ -116,7 +121,7 @@ export default function AuthScreen() {
           autoCapitalize="none"
           autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'}
           onChangeText={setPassword}
-          placeholder="At least 8 characters"
+          placeholder={mode === 'sign-up' ? '10+ characters, letter + number' : 'Your password'}
           placeholderTextColor={colors.textMuted}
           secureTextEntry
           style={styles.input}
@@ -159,23 +164,23 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   topRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  intro: { backgroundColor: colors.primary, borderRadius: 32, gap: spacing.lg, marginTop: spacing.xxl, overflow: 'hidden', padding: spacing.xl },
+  intro: { gap: 10, marginTop: 22 },
   introTop: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  introEyebrow: { color: colors.signal, fontSize: 13, fontWeight: '900', letterSpacing: 1.4 },
-  introTitle: { color: colors.white, fontSize: 38, fontWeight: '900', letterSpacing: -1.8, lineHeight: 41 },
-  introCopy: { color: '#C9C7C0', fontSize: 17, lineHeight: 25 },
-  promiseRow: { alignItems: 'stretch', flexDirection: 'row', gap: 7, marginVertical: spacing.xl },
-  promise: { alignItems: 'center', borderRadius: 18, flex: 1, gap: 3, justifyContent: 'center', minHeight: 86, paddingHorizontal: 5, transform: [{ rotate: '-2deg' }] },
-  promiseSignal: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderWidth: 1 },
-  promiseCobalt: { backgroundColor: colors.cobalt, transform: [{ rotate: '2deg' }] },
-  promiseOrange: { backgroundColor: colors.accentSoft, transform: [{ rotate: '-1deg' }] },
-  promiseValue: { color: colors.text, fontSize: 18, fontWeight: '900' },
-  promiseValueLight: { color: colors.white },
-  promiseLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '900', textAlign: 'center', textTransform: 'uppercase' },
-  promiseLabelLight: { color: '#E8EBFF' },
-  form: { backgroundColor: colors.surface, borderRadius: 30, gap: spacing.md },
-  label: { color: colors.textMuted, fontSize: 13, fontWeight: '900', marginTop: spacing.xs, textTransform: 'uppercase' },
-  input: { backgroundColor: colors.surfaceSoft, borderColor: colors.borderStrong, borderRadius: 18, borderWidth: 1, color: colors.text, fontSize: 17, minHeight: 60, paddingHorizontal: spacing.lg },
+  introEyebrow: { color: colors.accent, fontSize: 9, fontWeight: '700', letterSpacing: 1.5 },
+  introTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 53, letterSpacing: -0.5, lineHeight: 54 },
+  introCopy: { color: colors.textMuted, fontFamily: fonts.italic, fontSize: 25, lineHeight: 29 },
+  promiseRow: { alignItems: 'stretch', borderTopColor: colors.primary, borderTopWidth: 1, borderBottomColor: colors.primary, borderBottomWidth: 1, flexDirection: 'row', marginVertical: 22 },
+  promise: { alignItems: 'center', flex: 1, gap: 5, justifyContent: 'center', minHeight: 68, paddingHorizontal: 5 },
+  promiseSignal: { backgroundColor: 'transparent' },
+  promiseCobalt: { backgroundColor: 'transparent', borderLeftColor: colors.border, borderLeftWidth: 1, borderRightColor: colors.border, borderRightWidth: 1 },
+  promiseOrange: { backgroundColor: 'transparent' },
+  promiseValue: { color: colors.text, fontFamily: fonts.display, fontSize: 24, textTransform: 'uppercase' },
+  promiseValueLight: { color: colors.text },
+  promiseLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '500', textAlign: 'center' },
+  promiseLabelLight: { color: colors.textMuted },
+  form: { backgroundColor: 'transparent', borderWidth: 0, gap: 12, padding: 0 },
+  label: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginTop: 4 },
+  input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: 4, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 54, paddingHorizontal: 16 },
   error: { color: colors.danger, fontSize: 14, lineHeight: 21 },
   notice: { backgroundColor: colors.successSoft, borderRadius: radius.sm, color: colors.success, fontSize: 14, lineHeight: 21, padding: spacing.md },
   forgotButton: { alignSelf: 'flex-end', marginTop: -spacing.xs, paddingVertical: spacing.xs },

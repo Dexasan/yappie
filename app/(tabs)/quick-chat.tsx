@@ -1,56 +1,86 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
+import { TopicArtwork } from '@/components/TopicArtwork';
+import { Text, TextInput } from '@/components/Typography';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { BrandLockup } from '@/components/Brand';
-import { Avatar, Card, Muted, Pill, PrimaryButton, Screen } from '@/components/ui';
-import { useSession } from '@/context/SessionContext';
+import { BrandLockup, BrandMark } from '@/components/Brand';
+import { Avatar, Screen } from '@/components/ui';
 import { useCalls } from '@/context/CallContext';
-import { ensureDirectCallMicrophonePermission } from '@/features/calls/audio';
 import { listAvailableCallers, requestDirectCall, type AvailableCaller } from '@/features/calls/api';
 import {
   cancelQuickChatSearch,
   joinQuickChat,
-  leaveQuickChat,
-  loadPublicProfile,
-  type MatchResult,
-  type PublicProfile,
+  loadQuickChatMatchingCount,
+  loadTrendingMatchInterests,
+  type TrendingInterest,
 } from '@/features/quick-chat/api';
-import { colors, radius, spacing } from '@/theme/tokens';
+import { matchInterestCatalog } from '@/features/quick-chat/interests';
+import { colors, fonts } from '@/theme/tokens';
+import { trackEvent } from '@/features/analytics/api';
+import { ActivityButton } from '@/components/ActivityButton';
 
-type MatchState = 'idle' | 'searching' | 'matched';
-const suggestedInterests = [
-  'Anything', 'Music', 'Movies', 'Gaming', 'Anime', 'Books', 'Travel', 'Football',
-  'Tech', 'Food', 'Fitness', 'Study', 'Languages', 'Late night', 'Relationships',
-  'Career', 'Memes', 'Art', 'Politics', 'Philosophy', 'True crime', 'Photography', 'Cars', 'Fashion',
-];
+type MatchState = 'idle' | 'searching';
+
+function interestSearchKey(value: string) {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+const blockedInterestPattern = /(?:^|[^\p{L}\p{N}])(?:rape|rapist|raping|molest(?:ed|er|ers|ing|ation)?|incest(?:uous)?|p(?:ae|e)dophil(?:e|es|ia|ic)|sexual[\s-]+(?:assault|abuse|violence)|child[\s-]+(?:porn|sex|sexual[\s-]+abuse)|underage[\s-]+sex|bestiality|necrophilia)(?=$|[^\p{L}\p{N}])/iu;
+const blockedObfuscations = new Set(['rape', 'rapist', 'raping', 'molest', 'molester', 'molestation', 'incest', 'pedophile', 'paedophile', 'pedophilia', 'paedophilia', 'bestiality', 'necrophilia']);
+
+function normalizeTypedInterest(value: string) {
+  return value.trim().replace(/\s+/g, ' ').slice(0, 40);
+}
+
+function interestIsBlocked(value: string) {
+  return blockedInterestPattern.test(value) || blockedObfuscations.has(interestSearchKey(value));
+}
 
 function readableMatchError(error: unknown) {
   const message = error instanceof Error ? error.message : 'Matching failed. Please try again.';
-  if (message.toLowerCase().includes('network')) return 'The network is unavailable. Check your connection and try again.';
+  if (message.toLowerCase().includes('network')) return 'No connection. Try again.';
   return message;
 }
 
 export default function QuickChatScreen() {
-  const { profile } = useSession();
   const { isAvailable, isAvailabilityBusy, setAvailable } = useCalls();
   const [matchState, setMatchState] = useState<MatchState>('idle');
-  const [match, setMatch] = useState<MatchResult | null>(null);
-  const [partner, setPartner] = useState<PublicProfile | null>(null);
-  const [error, setError] = useState('');
-  const [topic, setTopic] = useState('Anything');
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [suggestedInterests, setSuggestedInterests] = useState<TrendingInterest[]>([]);
   const [interestInput, setInterestInput] = useState('');
+  const [error, setError] = useState('');
+  const [matchingCount, setMatchingCount] = useState<number | null>(null);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const activeSearchRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchGenerationRef = useRef(0);
   const [availableCallers, setAvailableCallers] = useState<AvailableCaller[]>([]);
   const [callersLoading, setCallersLoading] = useState(true);
   const [callingUserId, setCallingUserId] = useState<string | null>(null);
+  const searching = matchState === 'searching';
+  const searchStartedAt = useRef(0);
+  const suggestionQuery = interestSearchKey(interestInput.trim());
+  const suggestionPool = useMemo(() => Array.from(new Map(
+    [...suggestedInterests.map((interest) => interest.label), ...matchInterestCatalog]
+      .map((label) => [interestSearchKey(label), label]),
+  ).values()), [suggestedInterests]);
+  const interestSuggestions = suggestionQuery
+    ? suggestionPool
+      .filter((label) => !selectedInterests.some((selected) => interestSearchKey(selected) === interestSearchKey(label)))
+      .filter((label) => interestSearchKey(label).includes(suggestionQuery))
+      .sort((left, right) => Number(!interestSearchKey(left).startsWith(suggestionQuery)) - Number(!interestSearchKey(right).startsWith(suggestionQuery)))
+      .slice(0, 6)
+    : [];
+  const typedInterest = normalizeTypedInterest(interestInput);
+  const canonicalTypedInterest = suggestionPool.find((label) => interestSearchKey(label) === interestSearchKey(typedInterest));
+  const typedInterestChoice = canonicalTypedInterest ?? typedInterest;
+  const canAddTypedInterest = typedInterest.length >= 2 && !searching;
 
   const refreshAvailableCallers = useCallback(async () => {
     try {
-      const callers = await listAvailableCallers();
-      setAvailableCallers(callers);
+      setAvailableCallers(await listAvailableCallers());
     } catch {
       setAvailableCallers([]);
     } finally {
@@ -59,10 +89,45 @@ export default function QuickChatScreen() {
   }, []);
 
   useEffect(() => {
+    if (!appIsActive) return;
     void refreshAvailableCallers();
     const interval = setInterval(() => void refreshAvailableCallers(), 10_000);
     return () => clearInterval(interval);
-  }, [refreshAvailableCallers]);
+  }, [appIsActive, refreshAvailableCallers]);
+
+  const refreshMatchingCount = useCallback(async () => {
+    try {
+      setMatchingCount(await loadQuickChatMatchingCount());
+    } catch {
+      setMatchingCount(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!appIsActive) return;
+    void refreshMatchingCount();
+    const interval = setInterval(() => void refreshMatchingCount(), 4000);
+    return () => clearInterval(interval);
+  }, [appIsActive, refreshMatchingCount]);
+
+  useEffect(() => {
+    if (!appIsActive) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const interests = await loadTrendingMatchInterests(20);
+        if (active && interests.length) setSuggestedInterests(interests);
+      } catch {
+        if (active) setSuggestedInterests([]);
+      }
+    };
+    void refresh();
+    const interval = setInterval(() => void refresh(), 60_000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [appIsActive]);
 
   useEffect(() => {
     const stopActiveSearch = () => {
@@ -75,10 +140,10 @@ export default function QuickChatScreen() {
     };
 
     const appStateSubscription = AppState.addEventListener('change', (state) => {
+      setAppIsActive(state === 'active');
       if (state === 'active' || !activeSearchRef.current) return;
       stopActiveSearch();
       setMatchState('idle');
-      setError('Search paused while the app was away. Tap below when you are ready again.');
     });
 
     return () => {
@@ -90,19 +155,23 @@ export default function QuickChatScreen() {
   const pollForMatch = async (generation: number) => {
     if (!activeSearchRef.current || generation !== searchGenerationRef.current) return;
     try {
-      const result = await joinQuickChat(
-        profile?.languages.length ? profile.languages : ['English'],
-        topic === 'Anything' ? undefined : topic,
-      );
+      const result = await joinQuickChat(selectedInterests);
       if (!activeSearchRef.current || generation !== searchGenerationRef.current) return;
 
       if (result.match_status === 'matched' && result.session_id && result.conversation_id && result.matched_profile_id) {
-        const matchedProfile = await loadPublicProfile(result.matched_profile_id);
-        if (!activeSearchRef.current || generation !== searchGenerationRef.current) return;
+        trackEvent('match_found','matching',Date.now()-searchStartedAt.current);
         activeSearchRef.current = false;
-        setMatch(result);
-        setPartner(matchedProfile);
-        setMatchState('matched');
+        pollTimerRef.current = null;
+        setMatchState('idle');
+        router.push({
+          pathname: '/quick-chat/[sessionId]',
+          params: {
+            sessionId: result.session_id,
+            conversationId: result.conversation_id,
+            partnerId: result.matched_profile_id,
+            topic: (result.matched_interests.length ? result.matched_interests : selectedInterests).join(' · '),
+          },
+        });
         return;
       }
       pollTimerRef.current = setTimeout(() => void pollForMatch(generation), 2500);
@@ -115,18 +184,20 @@ export default function QuickChatScreen() {
   };
 
   const beginSearch = () => {
+    if (!selectedInterests.length || activeSearchRef.current) return;
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     const generation = searchGenerationRef.current + 1;
+    searchStartedAt.current=Date.now();
+    trackEvent('match_started','matching');
     searchGenerationRef.current = generation;
     setError('');
-    setMatch(null);
-    setPartner(null);
     setMatchState('searching');
     activeSearchRef.current = true;
     void pollForMatch(generation);
   };
 
   const cancelSearch = async () => {
+    trackEvent('match_cancelled','matching',Date.now()-searchStartedAt.current);
     searchGenerationRef.current += 1;
     activeSearchRef.current = false;
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -139,36 +210,51 @@ export default function QuickChatScreen() {
     }
   };
 
-  const useCustomInterest = () => {
-    const nextTopic = interestInput.trim().replace(/\s+/g, ' ').slice(0, 40);
-    if (!nextTopic) return;
-    setTopic(nextTopic);
+  const addInterest = (label: string) => {
+    const nextInterest = normalizeTypedInterest(label);
+    if (searching || nextInterest.length < 2) return;
+    if (interestIsBlocked(nextInterest)) {
+      setError('That interest is not allowed for matching. Choose a safe conversation topic.');
+      return;
+    }
+    if (selectedInterests.some((interest) => interestSearchKey(interest) === interestSearchKey(nextInterest))) {
+      setInterestInput('');
+      return;
+    }
+    if (selectedInterests.length >= 5) {
+      setError('You can select up to 5 interests.');
+      return;
+    }
+    setSelectedInterests((current) => [...current, nextInterest]);
     setInterestInput('');
+    setError('');
   };
 
-  const skipMatch = async () => {
-    if (match?.session_id) await leaveQuickChat(match.session_id, 'skip');
-    beginSearch();
+  const useTypedInterest = () => {
+    if (typedInterestChoice) addInterest(typedInterestChoice);
   };
 
-  const openConversation = () => {
-    if (!match?.session_id || !match.conversation_id || !match.matched_profile_id) return;
-    router.push({
-      pathname: '/quick-chat/[sessionId]',
-      params: { sessionId: match.session_id, conversationId: match.conversation_id, partnerId: match.matched_profile_id },
+  const toggleInterest = (label: string) => {
+    if (searching) return;
+    setError('');
+    setSelectedInterests((current) => {
+      const selected = current.some((interest) => interestSearchKey(interest) === interestSearchKey(label));
+      if (selected) return current.filter((interest) => interestSearchKey(interest) !== interestSearchKey(label));
+      if (current.length >= 5) {
+        setError('You can select up to 5 interests.');
+        return current;
+      }
+      return [...current, label];
     });
   };
-
-  const partnerName = partner?.display_name || (partner?.handle ? `@${partner.handle}` : 'New connection');
 
   const callPerson = async (caller: AvailableCaller) => {
     if (callingUserId) return;
     setCallingUserId(caller.user_id);
     setError('');
     try {
-      if (!(await ensureDirectCallMicrophonePermission())) {
-        throw new Error('Allow microphone access to make an audio call.');
-      }
+      const { ensureDirectCallMicrophonePermission } = await import('@/features/calls/audio');
+      if (!(await ensureDirectCallMicrophonePermission())) throw new Error('Allow microphone access to make a call.');
       const callId = await requestDirectCall(caller.user_id);
       setAvailableCallers((current) => current.filter((item) => item.user_id !== caller.user_id));
       router.push(`/calls/${callId}` as never);
@@ -180,235 +266,159 @@ export default function QuickChatScreen() {
     }
   };
 
+  const quickPicks = (suggestedInterests.length
+    ? suggestedInterests.map((interest) => interest.label)
+    : ['Music', 'Gaming', 'Movies', 'Deep conversations', 'Travel', 'Anime'])
+    .filter((label) => !interestIsBlocked(label)).slice(0, 6);
+
   return (
     <Screen>
       <View style={styles.topBar}>
         <BrandLockup compact />
-        <View style={styles.online}><View style={styles.onlineDot} /><Text style={styles.onlineText}>Online</Text></View>
+        <ActivityButton />
       </View>
 
-      <View style={styles.callShelf}>
-        <View style={styles.callShelfHeader}>
-          <View style={styles.callShelfTitleWrap}>
-            <View style={styles.pulseMark}><View style={styles.pulseCore} /></View>
-            <View>
-              <Text style={styles.callShelfTitle}>Available for a call</Text>
-              <Text style={styles.callShelfSubtitle}>Tap a person. Talk instantly.</Text>
-            </View>
+      <View style={styles.hero}>
+        <PaperSurface variant="note" color={colors.accentSoft} ink={colors.accentSolid} />
+        <View style={styles.heroRow}><View style={{flex:1}}><Text style={styles.heroTitle}>Match with strangers</Text></View><View style={styles.heroMark}><BrandMark size={92} /></View></View>
+        <Text style={styles.heroCopy}>One-to-one chats based on shared interests.</Text>
+      </View>
+
+      <View style={styles.matchCard}><PaperSurface variant="ticket" color={colors.surfaceSoft} ink={colors.borderStrong} />
+        <View style={styles.matchHeader}>
+          <Text style={styles.cardTitle}>{searching ? 'Finding a match…' : 'Choose interests'}</Text>
+          <View style={styles.matchingBadge}>
+            <View style={[styles.matchingDot, !matchingCount && styles.matchingDotEmpty]} />
+            <Text style={styles.matchingText}>{matchingCount === null ? 'Matching' : matchingCount + ' matching'}</Text>
           </View>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityState={{ checked: isAvailable, disabled: isAvailabilityBusy }}
-            disabled={isAvailabilityBusy}
-            onPress={() => void setAvailable(!isAvailable)}
-            style={[styles.availabilityToggle, isAvailable && styles.availabilityToggleOn]}
-          >
-            <View style={[styles.toggleKnob, isAvailable && styles.toggleKnobOn]} />
-          </Pressable>
         </View>
+        <Text style={styles.cardCopy}>{searching ? 'Looking for someone who shares your interests.' : 'Select 1–5 interests.'}</Text>
 
-        {callersLoading ? (
-          <ActivityIndicator color={colors.signal} style={styles.callersLoading} />
-        ) : availableCallers.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.callersScroller}>
-            <View style={styles.callerCards}>
-              {availableCallers.map((caller) => {
-                const name = caller.display_name || (caller.handle ? `@${caller.handle}` : 'YAPPIE member');
-                const isCalling = callingUserId === caller.user_id;
-                return (
-                  <View key={caller.user_id} style={styles.callerCard}>
-                    <View style={styles.callerAvatarWrap}>
-                      <Avatar label={name} path={caller.avatar_path} size={62} />
-                      <View style={styles.callerOnlineDot} />
-                    </View>
-                    <Text numberOfLines={1} style={styles.callerName}>{name}</Text>
-                    <Text numberOfLines={1} style={styles.callerMeta}>{caller.country_code ?? 'Worldwide'} · {caller.languages[0] ?? 'Any language'}</Text>
-                    <Pressable
-                      accessibilityLabel={`Call ${name}`}
-                      disabled={Boolean(callingUserId)}
-                      onPress={() => void callPerson(caller)}
-                      style={({ pressed }) => [styles.callButton, pressed && styles.callButtonPressed, Boolean(callingUserId) && styles.disabled]}
-                    >
-                      {isCalling ? <ActivityIndicator color={colors.primary} /> : <><Text style={styles.callGlyph}>⌕</Text><Text style={styles.callButtonText}>Call</Text></>}
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-        ) : (
-          <View style={styles.noCallers}>
-            <Text style={styles.noCallersText}>{isAvailable ? 'You are visible. Waiting for more people to come online.' : 'Nobody is open right now. Switch yourself on and be the first.'}</Text>
-          </View>
-        )}
-        <Text style={styles.callSafety}>No topic, no phone number, no setup · block or report anytime</Text>
-      </View>
-
-      {matchState === 'matched' ? (
-        <Card style={styles.matchCard}>
-          <Pill label="You found someone" tone="success" />
-          <View style={styles.avatarHalo}><Avatar label={partnerName} path={partner?.avatar_path} size={88} /></View>
-          <View style={styles.centered}>
-            <Text style={styles.matchName}>{partnerName}</Text>
-            <Muted>{partner?.country_code ?? 'Worldwide'} · {partner?.languages.join(', ') || 'Shared language'}</Muted>
-          </View>
-          <View style={styles.sharedRow}>{(partner?.languages ?? []).slice(0, 3).map((language) => <Pill key={language} label={language} />)}</View>
-          <PrimaryButton label="Start conversation" onPress={openConversation} />
-          <Pressable onPress={() => void skipMatch()} style={styles.secondaryButton}><Text style={styles.secondaryText}>Find someone else</Text></Pressable>
-        </Card>
-      ) : (
-        <View style={styles.hero}>
-          <View style={styles.heroTopLine}>
-            <Text style={styles.heroKicker}>Quick match</Text>
-            <View style={styles.heroStatus}><View style={styles.heroStatusDot} /><Text style={styles.heroStatusText}>Ready when you are</Text></View>
-          </View>
-          <Text style={styles.heroTitle}>{matchState === 'searching' ? 'Finding a voice worth meeting…' : 'Skip the profile.\nMeet the person.'}</Text>
-          <Text style={styles.heroCopy}>
-            {matchState === 'searching'
-              ? `Looking for someone open to ${topic === 'Anything' ? 'anything' : topic.toLowerCase()}.`
-              : 'A private one-to-one chat with someone new. Keep it open, or give the match one thing to go on.'}
-          </Text>
-
-          <View style={styles.matchPromises}>
-            <Text style={styles.matchPromise}>Anonymous first</Text>
-            <View style={styles.promiseDivider} />
-            <Text style={styles.matchPromise}>Text · 1:1</Text>
-            <View style={styles.promiseDivider} />
-            <Text style={styles.matchPromise}>Leave anytime</Text>
-          </View>
-
-          <View style={styles.interestBlock}>
-            <View style={styles.interestHeadingRow}>
-              <Text style={styles.interestHeading}>What do you want to talk about?</Text>
-              <Text numberOfLines={1} style={styles.activeInterest}>{topic}</Text>
-            </View>
-            <View style={styles.customRow}>
-              <TextInput
-                accessibilityLabel="Type any interest"
-                editable={matchState !== 'searching'}
-                maxLength={40}
-                onChangeText={setInterestInput}
-                onSubmitEditing={useCustomInterest}
-                placeholder="Type any interest…"
-                placeholderTextColor={colors.textSubtle}
-                returnKeyType="done"
-                style={styles.interestInput}
-                value={interestInput}
-              />
-              <Pressable
-                accessibilityRole="button"
-                disabled={!interestInput.trim() || matchState === 'searching'}
-                onPress={useCustomInterest}
-                style={[styles.useButton, (!interestInput.trim() || matchState === 'searching') && styles.disabled]}
-              >
-                <Text style={styles.useButtonText}>Use</Text>
+        <View style={styles.quickPicks}>
+          {quickPicks.map((label, index) => {
+            const selected = selectedInterests.some((interest) => interestSearchKey(interest) === interestSearchKey(label));
+            return (
+              <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected, disabled: searching }} disabled={searching} onPress={() => toggleInterest(label)} style={({ pressed }) => [styles.interestChip, {transform:[{rotate:index % 2 ? '2deg' : '-2deg'}]}, selected && styles.interestChipSelected, pressed && styles.pressed]}>
+                <TopicArtwork label={label} size={30} color={selected ? colors.primaryInk : colors.accent} /><Text style={[styles.interestChipText, selected && styles.interestChipTextSelected]}>{label}{selected ? ' ✓' : ''}</Text>
               </Pressable>
-            </View>
-            <ScrollView horizontal keyboardShouldPersistTaps="handled" showsHorizontalScrollIndicator={false} style={styles.topicScroller}>
-              <View style={styles.topicChoices}>
-                {suggestedInterests.map((option) => (
-                  <Pressable
-                    key={option}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: topic === option, disabled: matchState === 'searching' }}
-                    disabled={matchState === 'searching'}
-                    onPress={() => setTopic(option)}
-                    style={[styles.topicChoice, topic === option && styles.topicChoiceSelected]}
-                  >
-                    <Text style={[styles.topicChoiceText, topic === option && styles.topicChoiceTextSelected]}>{option}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          {matchState === 'searching' ? (
-            <View style={styles.searchingPanel}>
-              <ActivityIndicator color={colors.accent} />
-              <Pressable onPress={() => void cancelSearch()} style={styles.secondaryButton}><Text style={styles.secondaryText}>Cancel search</Text></Pressable>
-            </View>
-          ) : (
-            <Pressable accessibilityRole="button" onPress={beginSearch} style={({ pressed }) => [styles.matchButton, pressed && styles.matchButtonPressed]}>
-              <Text style={styles.matchButtonText}>Match me now</Text><Text style={styles.matchArrow}>→</Text>
-            </Pressable>
-          )}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Text style={styles.safetyNote}>Private 1:1 chat · Block or report anytime</Text>
+            );
+          })}
         </View>
-      )}
+
+        <View style={styles.customInterest}>
+          <Text style={styles.searchGlyph}>⌕</Text>
+          <TextInput accessibilityLabel="Search matching interests" autoCapitalize="none" autoCorrect={false} editable={!searching} maxLength={40} onChangeText={setInterestInput} onSubmitEditing={useTypedInterest} placeholder="Search or add an interest" placeholderTextColor={colors.textSubtle} returnKeyType="search" style={styles.interestInput} value={interestInput} />
+          {interestInput.trim() ? <Pressable accessibilityLabel="Add interest" accessibilityRole="button" disabled={!canAddTypedInterest} onPress={useTypedInterest} style={[styles.addInterestButton, !canAddTypedInterest && styles.disabled]}><Text style={styles.addInterestText}>+</Text></Pressable> : null}
+        </View>
+        {interestInput.trim() ? (
+          <View style={styles.suggestionList}>
+            {interestSuggestions.map((label) => (
+              <Pressable key={label} accessibilityRole="button" disabled={searching} onPress={() => addInterest(label)} style={({ pressed }) => [styles.suggestionRow, pressed && styles.pressed]}><TopicArtwork label={label} size={24} /><Text style={styles.suggestionText}>{label}</Text><Text style={styles.suggestionAction}>Add +</Text></Pressable>
+            ))}
+            {!canonicalTypedInterest && typedInterest.length >= 2 ? <Pressable accessibilityRole="button" disabled={searching} onPress={useTypedInterest} style={styles.suggestionRow}><TopicArtwork label={typedInterest} size={24} /><Text numberOfLines={1} style={styles.suggestionText}>Use “{typedInterest}”</Text><Text style={styles.suggestionAction}>Add +</Text></Pressable> : null}
+          </View>
+        ) : null}
+
+        {selectedInterests.filter((interest) => !quickPicks.some((pick) => interestSearchKey(pick) === interestSearchKey(interest))).length ? (
+          <View style={styles.selectedChips}>
+            {selectedInterests.filter((interest) => !quickPicks.some((pick) => interestSearchKey(pick) === interestSearchKey(interest))).map((interest) => (
+              <Pressable key={interest} accessibilityRole="button" accessibilityLabel={'Remove ' + interest} disabled={searching} onPress={() => toggleInterest(interest)} style={styles.selectedChip}><TopicArtwork label={interest} size={24} color={colors.primaryInk} /><Text style={styles.selectedChipText}>{interest}  ×</Text></Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.selectionMeta}><Text style={styles.selectionCopy}>{selectedInterests.length ? selectedInterests.length + ' of 5 interests selected' : 'Choose at least one to get started'}</Text><Text style={styles.privateLabel}>1:1 chat</Text></View>
+        {searching ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel matching" onPress={() => void cancelSearch()} style={styles.cancelButton}><ActivityIndicator color={colors.accent} size="small" /><Text style={styles.cancelText}>Searching · Tap to cancel</Text></Pressable>
+        ) : (
+          <Pressable accessibilityRole="button" accessibilityLabel="Find a match" accessibilityState={{ disabled: !selectedInterests.length }} disabled={!selectedInterests.length} onPress={beginSearch} style={({ pressed }) => [styles.matchButton, !selectedInterests.length && styles.matchButtonDisabled, pressed && styles.pressed]}><Text style={[styles.matchButtonText, !selectedInterests.length && styles.matchButtonTextDisabled]}>FIND A MATCH</Text><Text style={[styles.matchArrow, !selectedInterests.length && styles.matchButtonTextDisabled]}>↗</Text></Pressable>
+        )}
+      </View>
+
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+
+      <View style={styles.callSection}><PaperSurface variant="note" color={colors.cobaltSoft} ink={colors.cobalt} />
+        <View style={styles.callHeader}>
+          <View style={{ flex: 1 }}><View style={{flexDirection:"row",alignItems:"center",gap:8}}><InkDrawing motif="sound" size={34} color={colors.cobalt} /><Text style={styles.sectionTitle}>Voice calls</Text></View><Text style={styles.sectionMeta}>{isAvailable ? 'Available for incoming calls.' : 'Turn on to receive voice calls.'}</Text></View>
+          <Pressable accessibilityLabel="Available for voice calls" accessibilityRole="switch" hitSlop={6} accessibilityState={{ checked: isAvailable, disabled: isAvailabilityBusy }} disabled={isAvailabilityBusy} onPress={() => void setAvailable(!isAvailable)} style={[styles.availabilityToggle, isAvailable && styles.availabilityToggleOn]}><View style={[styles.toggleKnob, isAvailable && styles.toggleKnobOn]} /></Pressable>
+        </View>
+        {callersLoading ? <ActivityIndicator color={colors.accent} style={styles.loading} /> : null}
+        {!callersLoading && availableCallers.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.callersScroller} contentContainerStyle={styles.callerCards}>
+            {availableCallers.map((caller) => {
+              const name = caller.display_name || (caller.handle ? '@' + caller.handle : 'Yappie member');
+              const isCalling = callingUserId === caller.user_id;
+              return <Pressable key={caller.user_id} accessibilityRole="button" accessibilityLabel={'Call ' + name} disabled={Boolean(callingUserId)} onPress={() => void callPerson(caller)} style={({ pressed }) => [styles.callerCard, pressed && styles.pressed]}><View><Avatar label={name} path={caller.avatar_path} size={56} /><View style={styles.callerDot} /></View><Text numberOfLines={1} style={styles.callerName}>{name}</Text><Text style={styles.callAction}>{isCalling ? 'Calling…' : 'Call ↗'}</Text></Pressable>;
+            })}
+          </ScrollView>
+        ) : null}
+        {!callersLoading && !availableCallers.length ? <View style={styles.emptyCalls}><InkDrawing motif="sound" size={54} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.emptyCallsTitle}>No one available to call</Text><Text style={styles.emptyCallsCopy}>People available for voice calls will appear here.</Text></View></View> : null}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  topBar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg },
-  online: { alignItems: 'center', backgroundColor: colors.successSoft, borderRadius: radius.pill, flexDirection: 'row', gap: 7, paddingHorizontal: 11, paddingVertical: 7 },
-  onlineDot: { backgroundColor: colors.success, borderRadius: 4, height: 7, width: 7 },
-  onlineText: { color: colors.success, fontSize: 12, fontWeight: '900', letterSpacing: 0.5, textTransform: 'uppercase' },
-  callShelf: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 25, borderWidth: 1, gap: spacing.md, marginBottom: spacing.lg, overflow: 'hidden', paddingVertical: spacing.lg },
-  callShelfHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.lg },
-  callShelfTitleWrap: { alignItems: 'center', flexDirection: 'row', flex: 1, gap: spacing.md },
-  pulseMark: { alignItems: 'center', backgroundColor: colors.successSoft, borderRadius: 19, height: 38, justifyContent: 'center', width: 38 },
-  pulseCore: { backgroundColor: colors.success, borderRadius: 7, height: 13, width: 13 },
-  callShelfTitle: { color: colors.text, fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
-  callShelfSubtitle: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
-  availabilityToggle: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 18, borderWidth: 1, height: 34, justifyContent: 'center', paddingHorizontal: 3, width: 58 },
-  availabilityToggleOn: { backgroundColor: colors.signal, borderColor: colors.signal },
-  toggleKnob: { backgroundColor: colors.textSubtle, borderRadius: 13, height: 26, width: 26 },
-  toggleKnobOn: { backgroundColor: colors.primary, transform: [{ translateX: 24 }] },
-  callersLoading: { height: 150 },
-  callersScroller: { marginTop: spacing.xs },
-  callerCards: { flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.lg },
-  callerCard: { alignItems: 'center', backgroundColor: colors.surfaceSoft, borderColor: colors.border, borderRadius: 21, borderWidth: 1, padding: spacing.md, width: 154 },
-  callerAvatarWrap: { marginBottom: spacing.sm, position: 'relative' },
-  callerOnlineDot: { backgroundColor: colors.success, borderColor: colors.surfaceSoft, borderRadius: 7, borderWidth: 3, bottom: 1, height: 15, position: 'absolute', right: 1, width: 15 },
-  callerName: { color: colors.text, fontSize: 16, fontWeight: '900', maxWidth: '100%' },
-  callerMeta: { color: colors.textMuted, fontSize: 11.5, marginTop: 3, maxWidth: '100%' },
-  callButton: { alignItems: 'center', backgroundColor: colors.signal, borderRadius: radius.pill, flexDirection: 'row', gap: 5, justifyContent: 'center', marginTop: spacing.md, minHeight: 42, width: '100%' },
-  callButtonPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
-  callGlyph: { color: colors.primary, fontSize: 17, fontWeight: '900', transform: [{ rotate: '-45deg' }] },
-  callButtonText: { color: colors.primary, fontSize: 14, fontWeight: '900' },
-  noCallers: { backgroundColor: colors.surfaceSoft, borderRadius: radius.md, marginHorizontal: spacing.lg, padding: spacing.lg },
-  noCallersText: { color: colors.textMuted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  callSafety: { color: colors.textSubtle, fontSize: 11.5, fontWeight: '700', paddingHorizontal: spacing.lg, textAlign: 'center' },
-  hero: { backgroundColor: '#15171B', borderColor: colors.border, borderLeftColor: colors.accent, borderLeftWidth: 4, borderRadius: 28, borderWidth: 1, gap: spacing.lg, padding: 20 },
-  heroTopLine: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  heroKicker: { color: colors.accent, fontSize: 12, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
-  heroStatus: { alignItems: 'center', flexDirection: 'row', gap: 6 },
-  heroStatusDot: { backgroundColor: colors.success, borderRadius: 4, height: 7, width: 7 },
-  heroStatusText: { color: colors.textSubtle, fontSize: 11.5, fontWeight: '700' },
-  heroTitle: { color: colors.text, fontSize: 37, fontWeight: '900', letterSpacing: -1.7, lineHeight: 40 },
-  heroCopy: { color: colors.textMuted, fontSize: 16, lineHeight: 23, maxWidth: 330 },
-  matchPromises: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  matchPromise: { color: colors.textSubtle, fontSize: 11.5, fontWeight: '800' },
-  promiseDivider: { backgroundColor: colors.borderStrong, borderRadius: 2, height: 4, width: 4 },
-  interestBlock: { gap: spacing.md, marginTop: spacing.sm },
-  interestHeadingRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
-  interestHeading: { color: colors.text, flex: 1, fontSize: 15, fontWeight: '900' },
-  activeInterest: { color: colors.accent, fontSize: 13, fontWeight: '900', maxWidth: 120 },
-  customRow: { flexDirection: 'row', gap: spacing.sm },
-  interestInput: { backgroundColor: colors.surfaceSoft, borderColor: colors.borderStrong, borderRadius: 16, borderWidth: 1, color: colors.text, flex: 1, fontSize: 16, minHeight: 54, paddingHorizontal: spacing.lg },
-  useButton: { alignItems: 'center', backgroundColor: colors.primary, borderRadius: 16, justifyContent: 'center', minWidth: 64, paddingHorizontal: spacing.md },
-  useButtonText: { color: colors.white, fontSize: 15, fontWeight: '900' },
+  heroRow: {flexDirection:'row',alignItems:'center',gap:5},
+  heroMark: { marginVertical: -4, transform: [{ rotate: '-9deg' }] },
+  topBar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 6 },
+  hero: { marginBottom: 10, marginTop: 6, paddingHorizontal: 23, paddingVertical: 16 },
+  heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 32, letterSpacing: -0.8, lineHeight: 37 },
+  heroCopy: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 6 },
+  matchCard: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 20 },
+  matchHeader: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' },
+  cardTitle: { color: colors.text, fontFamily: fonts.editorial, fontSize: 30, lineHeight: 34 },
+  cardCopy: { color: colors.textMuted, fontSize: 12, lineHeight: 19, marginTop: 6 },
+  matchingBadge: { alignItems: 'center', flexDirection: 'row', gap: 5 },
+  matchingDot: { backgroundColor: colors.success, borderRadius: 4, height: 6, width: 6 },
+  matchingDotEmpty: { backgroundColor: colors.textSubtle },
+  matchingText: { color: colors.textSubtle, fontSize: 9, fontWeight: '500' },
+  quickPicks: { flexDirection: 'row', flexWrap: 'wrap', columnGap: '3%', rowGap: 7, marginVertical: 10 },
+  interestChip: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderRadius: 12, justifyContent: 'center', minHeight: 58, paddingHorizontal: 3, width:'31.3%', gap: 1 },
+  interestChipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  interestChipText: { color: colors.text, fontFamily: fonts.medium, fontSize: 12 },
+  interestChipTextSelected: { color: colors.primaryInk, fontSize: 12, fontWeight: '700' },
+  customInterest: { alignItems: 'center', borderColor: colors.borderStrong, borderBottomWidth: 1, flexDirection: 'row', paddingHorizontal: 2 },
+  searchGlyph: { color: colors.textSubtle, fontSize: 25, marginRight: 8 },
+  interestInput: { color: colors.text, flex: 1, fontSize: 13, minHeight: 48, paddingVertical: 10 },
+  addInterestButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 32 },
+  addInterestText: { color: colors.accent, fontSize: 24, fontWeight: '600' },
+  suggestionList: { backgroundColor: colors.backgroundRaised, borderColor: colors.border, borderRadius: 14, borderWidth: 1, marginTop: 6, overflow: 'hidden' },
+  suggestionRow: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 10, justifyContent: 'space-between', minHeight: 46, paddingHorizontal: 14 },
+  suggestionText: { color: colors.text, flex: 1, fontSize: 14 },
+  suggestionAction: { color: colors.cobalt, fontSize: 12, fontWeight: '700' },
+  selectedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  selectedChip: { backgroundColor: colors.primary, borderColor: colors.primary, borderRadius: 4, borderWidth: 1, alignItems: 'center', flexDirection: 'row', gap: 6, maxWidth: '100%', minHeight: 44, paddingHorizontal: 10, paddingVertical: 5 },
+  selectedChipText: { color: colors.primaryInk, fontSize: 12, fontWeight: '700', flexShrink: 1 },
+  selectionMeta: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', marginBottom: 8, marginTop: 8 },
+  selectionCopy: { color: colors.textSubtle, fontSize: 11 },
+  privateLabel: { color: colors.textSubtle, fontSize: 11 },
+  matchButton: { alignItems: 'center', backgroundColor: colors.accentSolid, borderRadius: 40, flexDirection: 'row', justifyContent: 'center', minHeight: 54, paddingHorizontal: 12, transform:[{rotate:'-2deg'}] },
+  matchButtonDisabled: { backgroundColor: colors.surfaceRaised },
+  matchButtonText: { color: colors.white, fontFamily: fonts.display, fontSize: 22, letterSpacing: 0.5 },
+  matchButtonTextDisabled: { color: colors.textSubtle },
+  matchArrow: { color: colors.white, fontSize: 24, marginLeft: 10 },
+  cancelButton: { alignItems: 'center', backgroundColor: colors.accentSoft, borderColor: colors.accent, borderRadius: 8, borderWidth: 1, flexDirection: 'row', gap: 10, justifyContent: 'center', minHeight: 56 },
+  cancelText: { color: colors.accent, fontSize: 14, fontWeight: '700' },
   disabled: { opacity: 0.4 },
-  topicScroller: { marginHorizontal: -20 },
-  topicChoices: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 20 },
-  topicChoice: { backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10 },
-  topicChoiceSelected: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
-  topicChoiceText: { color: colors.textMuted, fontSize: 14, fontWeight: '800' },
-  topicChoiceTextSelected: { color: colors.accent },
-  matchButton: { alignItems: 'center', backgroundColor: colors.accent, borderRadius: 19, flexDirection: 'row', justifyContent: 'space-between', minHeight: 66, paddingHorizontal: 22 },
-  matchButtonPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
-  matchButtonText: { color: colors.primary, fontSize: 18, fontWeight: '900' },
-  matchArrow: { color: colors.primary, fontSize: 25, fontWeight: '900' },
-  searchingPanel: { alignItems: 'center', gap: spacing.md },
-  safetyNote: { color: colors.textSubtle, fontSize: 12, fontWeight: '700', textAlign: 'center' },
-  error: { color: colors.danger, fontSize: 14, lineHeight: 21, textAlign: 'center' },
-  matchCard: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.accent, gap: spacing.lg, paddingVertical: spacing.xl },
-  avatarHalo: { backgroundColor: colors.signal, borderRadius: 34, padding: 9 },
-  centered: { alignItems: 'center', gap: spacing.sm },
-  matchName: { color: colors.text, fontSize: 30, fontWeight: '900', letterSpacing: -1 },
-  sharedRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, justifyContent: 'center' },
-  secondaryButton: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderRadius: 17, borderWidth: 1, minHeight: 52, justifyContent: 'center', paddingHorizontal: spacing.lg, width: '100%' },
-  secondaryText: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  callSection: { marginTop: 12, padding: 20, gap: 4 },
+  callHeader: { alignItems: 'center', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  sectionTitle: { color: colors.text, fontFamily: fonts.italic, fontSize: 29, lineHeight:32, flexShrink:1 },
+  sectionMeta: { color: colors.textSubtle, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  availabilityToggle: { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong, borderWidth: 1, borderRadius: 22, height: 36, justifyContent: 'center', paddingHorizontal: 4, width: 58 },
+  availabilityToggleOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  toggleKnob: { backgroundColor: colors.textSubtle, borderRadius: 14, height: 26, width: 26 },
+  toggleKnobOn: { backgroundColor: colors.black, transform: [{ translateX: 22 }] },
+  loading: { height: 96 },
+  callersScroller: { marginTop: 16, marginHorizontal: -22 },
+  callerCards: { gap: 10, paddingHorizontal: 22 },
+  callerCard: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 8, borderWidth: 1, padding: 14, width: 110 },
+  callerDot: { backgroundColor: colors.success, borderColor: colors.surface, borderRadius: 7, borderWidth: 3, bottom: 0, height: 14, position: 'absolute', right: 0, width: 14 },
+  callerName: { color: colors.text, fontSize: 13, fontWeight: '700', marginTop: 10, maxWidth: '100%' },
+  callAction: { color: colors.accent, fontSize: 11, fontWeight: '600', marginTop: 6 },
+  emptyCalls: { alignItems: 'center', flexDirection: 'row', gap: 12, marginTop: 6, paddingVertical: 8 },
+  emptyCallsTitle: { color: colors.text, fontFamily: fonts.editorial, fontSize: 22 },
+  emptyCallsCopy: { color: colors.textSubtle, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  error: { color: colors.danger, fontSize: 13, lineHeight: 20, marginTop: 14 },
 });
