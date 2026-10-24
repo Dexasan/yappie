@@ -1,4 +1,24 @@
-# Android test build: 0.1.5
+# Android preview: 0.1.8 (13)
+
+The combined batch is committed and is being prepared as an EAS `preview` APK.
+This version includes the approved talking-mouth logo, matching-first copy,
+Activity and unread UI, personalized discovery, saved posts, and Settings
+placement changes. Resend sender and email template changes are configured on
+the backend and do not depend on the APK.
+
+TypeScript, the image-parser dependency check, engagement migration/behavior
+tests, Android Metro/Hermes export, and 320px/390px fixture layout checks passed.
+Physical-device behavior and email delivery have not been tested in this batch.
+Android push remains blocked on Firebase setup; in-app unread indicators and
+Activity are included.
+
+Build/download details will be added after EAS produces the artifact.
+
+## Previous Android test build: 0.1.7
+
+See the [UI refinement release](UI_REFINEMENT_RELEASE.md) for the current APK and corrected navigation/design. The [engagement test release](ENGAGEMENT_TEST_RELEASE.md) records the backend deployment and Firebase push limitation.
+
+## Previous Android test build: 0.1.5
 
 - Version: **0.1.5 (10)**
 - Package: `com.socialdiscovery.app`
