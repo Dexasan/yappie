@@ -2,7 +2,7 @@
   "expo": {
     "name": "YAPPIE",
     "slug": "social-discovery",
-    "version": "0.1.5",
+    "version": "0.1.8",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/brand/yappie-icon.png",
@@ -17,6 +17,7 @@
       "fallbackToCacheTimeout": 0
     },
     "plugins": [
+      "expo-notifications",
       [
         "expo-router",
         {
@@ -39,7 +40,13 @@
           "resizeMode": "contain"
         }
       ],
-      "@cloudflare/react-native-webrtc",
+      [
+        "@cloudflare/react-native-webrtc",
+        {
+          "cameraPermission": false,
+          "microphonePermission": "Allow YAPPIE to use your microphone for private calls and live Club rooms."
+        }
+      ],
       [
         "expo-secure-store",
         {
@@ -51,7 +58,7 @@
     ],
     "android": {
       "package": "com.socialdiscovery.app",
-      "versionCode": 10,
+      "versionCode": 13,
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
@@ -68,6 +75,17 @@
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "predictiveBackGestureEnabled": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.socialdiscovery.app",
+      "buildNumber": "13",
+      "supportsTablet": false,
+      "icon": "./assets/brand/yappie-icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Allow YAPPIE to use your microphone for private calls and live Club rooms.",
+        "NSPhotoLibraryUsageDescription": "Allow YAPPIE to choose profile and Club cover images."
+      }
     },
     "experiments": {
       "typedRoutes": true
