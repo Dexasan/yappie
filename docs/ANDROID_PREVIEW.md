@@ -1,6 +1,6 @@
 # Android preview: 0.1.8 (13)
 
-The combined batch is committed and is being prepared as an EAS `preview` APK.
+The combined batch was built successfully as an EAS `preview` APK on 2026-10-24.
 This version includes the approved talking-mouth logo, matching-first copy,
 Activity and unread UI, personalized discovery, saved posts, and Settings
 placement changes. Resend sender and email template changes are configured on
@@ -12,7 +12,27 @@ Physical-device behavior and email delivery have not been tested in this batch.
 Android push remains blocked on Firebase setup; in-app unread indicators and
 Activity are included.
 
-Build/download details will be added after EAS produces the artifact.
+- [Build / install page](https://expo.dev/accounts/dexasan/projects/social-discovery/builds/7372a7a6-5150-46e2-8ef6-1e766901fea2)
+- [Download APK](https://expo.dev/artifacts/eas/FCyUuRTnYhMvJFAhJl2I_ktrPe2_ET7zNc-2yUG5KH4.apk)
+- Package: `com.socialdiscovery.app`; version `0.1.8`; Android build `13`.
+- Source: `6832f4599222f967bd4b2ef1f22d554306e018ba`, from a clean checkout
+  pushed to `origin/fix/live-audio-lifecycle` before the build was submitted.
+- Local artifact: `dist/yappie-0.1.8-13.apk`.
+- Size: **161,572,589 bytes**.
+- SHA-256: `0D4008E6CC70A250B206AF952FB33FDA3C411C823CF63A24B638698069A9943E`.
+- All **1,406 ZIP entries** passed CRC integrity checks. The compiled manifest
+  reports the package/version/build above and does not request camera access.
+- APK v2 signing-certificate SHA-256:
+  `2B0017777286059EF0F5D4A130B1C3F8A185ACA00AE05E7F1AD65145E1777549`,
+  matching the previous Android preview signing certificate.
+- EAS records artifact expiry as **2026-11-07**. The build page remains the
+  build record if the direct artifact link expires.
+
+The build uses the existing EAS Android keystore, the preview backend environment,
+and embedded JavaScript/assets. No Metro server is needed; OTA updates remain
+disabled. Physical-phone installation, audio, and real email delivery still need
+device testing. Email sender/template branding is live; verification links still
+use the underlying Supabase authentication domain.
 
 ## Previous Android test build: 0.1.7
 
