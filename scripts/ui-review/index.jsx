@@ -1,4 +1,8 @@
 import { LaunchScreen } from '../../src/components/LaunchScreen';
+import Activity from '../../app/activity';
+import Saved from '../../app/saved';
+import NotificationSettings from '../../app/settings/notifications';
+import Moderation from '../../app/moderation';
 import NewMessage from '../../app/messages/new';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -29,6 +33,7 @@ import Guidelines from '../../app/legal/[document]';
 import QuickConversation from '../../app/quick-chat/[sessionId]';
 import ArtworkCredits from '../../app/legal/artwork';
 const screens = {launch:LaunchScreen,'new-message':NewMessage,guidelines:Guidelines,'quick-chat':Yap,feed:Feed,clubs:Clubs,messages:Messages,profile:Profile,auth:Auth,chat:Chat,wallet:Wallet,onboarding:Onboarding,settings:Settings,safety:Safety,'club-create':ClubCreate,'profile-edit':ProfileEdit,call:Call,club:Club,room:Room,person:Person,post:Post,'quick-conversation':QuickConversation};
+Object.assign(screens,{activity:Activity,saved:Saved,notifications:NotificationSettings,moderation:Moderation});
 const Page = activeScreen === 'artwork' ? ArtworkCredits : screens[activeScreen] || Yap;
 const isTab = ['quick-chat','feed','clubs','messages','profile'].includes(activeScreen);
 const artwork = new Image();

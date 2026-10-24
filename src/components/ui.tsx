@@ -1,7 +1,8 @@
 import { Text } from '@/components/Typography';
 import { PropsWithChildren, ReactElement, ReactNode, useEffect, useState } from 'react';
 import { Pressable, Image, KeyboardAvoidingView, Platform, ScrollView, StyleProp, StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
-import type { RefreshControlProps } from 'react-native';
+import type { RefreshControlProps, ScrollViewProps } from 'react-native';
+import type { Ref } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, fonts, radius, spacing } from '@/theme/tokens';
@@ -13,9 +14,14 @@ export function Screen({
   contentStyle,
   refreshControl,
   scroll = true,
-}: PropsWithChildren<{ contentStyle?: StyleProp<ViewStyle>; refreshControl?: ReactElement<RefreshControlProps>; scroll?: boolean }>) {
+  scrollViewRef,
+  onScroll,
+}: PropsWithChildren<{ contentStyle?: StyleProp<ViewStyle>; refreshControl?: ReactElement<RefreshControlProps>; scroll?: boolean; scrollViewRef?: Ref<ScrollView>; onScroll?: ScrollViewProps['onScroll'] }>) {
   const content = scroll ? (
     <ScrollView
+      ref={scrollViewRef}
+      onScroll={onScroll}
+      scrollEventThrottle={100}
       automaticallyAdjustKeyboardInsets
       contentContainerStyle={[styles.screenContent, contentStyle]}
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -82,7 +88,7 @@ export function RetroHeader({
 }: {
   action?: ReactNode;
   compact?: boolean;
-  eyebrow: string;
+  eyebrow?: string;
   glyph?: string;
   icon?: ReactNode;
   title: string;
@@ -93,7 +99,7 @@ export function RetroHeader({
       <View style={styles.retroHeaderLead}>
         {icon ?? (glyph ? <RetroGlyph glyph={glyph} tone={tone} /> : null)}
         <View style={{ flexShrink: 1 }}>
-          <Text style={styles.retroHeaderEyebrow}>{eyebrow}</Text>
+          {eyebrow ? <Text style={styles.retroHeaderEyebrow}>{eyebrow}</Text> : null}
           <Text style={[styles.retroHeaderTitle, compact && { fontSize: 34, lineHeight: 37 }]}>{title}</Text>
         </View>
       </View>

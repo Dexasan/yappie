@@ -1,14 +1,16 @@
 import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
 import { Text, TextInput } from '@/components/Typography';
-import { useEffect, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar, PixelRule, RetroGlyph, RetroHeader, Screen } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
-import { createReply, loadPostReplies, type FeedReply } from '@/features/feed/api';
-import { loadAvatarPathMap } from '@/features/profile/avatar-data';
+import { createReply, loadPost, loadPostReplies, subscribeToPost, type FeedPost, type FeedReply } from '@/features/feed/api';
 import { colors, fonts, spacing } from '@/theme/tokens';
+import { ContentMenu } from '@/components/ContentMenu';
+import { useDraft } from '@/lib/use-draft';
+import { trackEvent } from '@/features/analytics/api';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -17,37 +19,52 @@ function first(value: string | string[] | undefined) {
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; body?: string; author?: string; authorId?: string }>();
   const postId = first(params.postId);
-  const body = first(params.body) ?? 'Conversation';
-  const author = first(params.author) ?? 'Community member';
-  const authorId = first(params.authorId);
-  const { profile, user } = useSession();
+  const [post, setPost] = useState<FeedPost | null>(null);
+  const body = post?.body ?? '';
+  const author = post?.author_display_name ?? post?.author_handle ?? 'Community member';
+  const authorId = post?.author_id;
+  const { profile, user, isLoading } = useSession();
   const [replies, setReplies] = useState<FeedReply[]>([]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useDraft(user?.id, `reply:${postId}`);
   const [replyTarget, setReplyTarget] = useState<FeedReply | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [authorAvatarPath, setAuthorAvatarPath] = useState<string | null>(null);
+  const authorAvatarPath = post?.author_avatar_path;
+  const request = useRef(0);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!postId) return;
+    const generation = ++request.current;
     try {
-      const [nextReplies, avatars] = await Promise.all([
+      const [nextReplies, nextPost] = await Promise.all([
         loadPostReplies(postId),
-        loadAvatarPathMap([authorId]),
+        loadPost(postId),
       ]);
+      if (generation !== request.current) return;
       setReplies(nextReplies);
-      setAuthorAvatarPath(authorId ? avatars.get(authorId) ?? null : null);
+      setPost(nextPost);
+      setError('');
     } catch (nextError) {
+      if (generation !== request.current) return;
       setError(nextError instanceof Error ? nextError.message : 'Could not load replies.');
     } finally {
-      setLoading(false);
+      if (generation === request.current) setLoading(false);
     }
-  };
+  }, [postId]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    if (!user || !postId) return;
+    setPost(null);
+    setReplies([]);
+    setLoading(true);
     void refresh();
-  }, [authorId, postId]);
+    const unsubscribe = subscribeToPost(postId, () => void refresh());
+    return () => { ++request.current; unsubscribe(); };
+  }, [refresh, user?.id, postId]));
+
+  if (!isLoading && !user) return <Redirect href={{ pathname: '/auth', params: { returnTo: `/post/${postId}` } }} />;
+  if (!loading && !post) return <Screen><RetroHeader title="Conversation" eyebrow="DISCOVER" /><Text style={{ color: colors.text }}>{error || 'This post is no longer available.'}</Text><Pressable onPress={() => void refresh()} style={{ padding: 16 }}><Text style={{ color: colors.accent }}>Try again</Text></Pressable><Pressable onPress={() => router.replace('/(tabs)/feed')} style={{ padding: 16 }}><Text style={{ color: colors.accent }}>Back to Discover</Text></Pressable></Screen>;
 
   const reply = async () => {
     if (!postId || !user || !draft.trim() || submitting) return;
@@ -55,6 +72,7 @@ export default function PostDetailScreen() {
     setError('');
     try {
       await createReply(postId, user.id, draft, replyTarget?.reply_id ?? null);
+      trackEvent('reply_sent','post');
       setDraft('');
       setReplyTarget(null);
       await refresh();
@@ -104,6 +122,7 @@ export default function PostDetailScreen() {
           <Text style={styles.author}>{author}</Text>
         </Pressable>
         <Text style={styles.body}>{body}</Text>
+        {post ? <ContentMenu id={post.post_id} authorId={post.author_id} onChanged={() => void refresh()} /> : null}
         <View style={styles.threadStem} />
       </View>
 
@@ -112,7 +131,7 @@ export default function PostDetailScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {loading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : null}
       <PixelRule label={replies.length ? `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}` : 'replies'} />
-      {!loading && replies.length === 0 ? <View style={styles.empty}><RetroGlyph glyph="⌁" tone="neutral" /><View><Text style={styles.emptyTitle}>NO SIGNAL YET</Text><Text style={styles.emptyText}>Be the first reply.</Text></View></View> : null}
+      {!loading && replies.length === 0 ? <View style={styles.empty}><RetroGlyph glyph="⌁" tone="neutral" /><View><Text style={styles.emptyTitle}>NO REPLIES YET</Text><Text style={styles.emptyText}>Be the first reply.</Text></View></View> : null}
       <View style={styles.replies}>
         {replies.map((item, index) => {
           const name = item.author_display_name || (item.author_handle ? `@${item.author_handle}` : 'Community member');
@@ -132,6 +151,7 @@ export default function PostDetailScreen() {
                 </Pressable>
                 {item.parent_reply_id ? <View style={styles.parentQuote}><Text style={styles.replyingText}>↳ {item.parent_author_name ? `Reply to ${item.parent_author_name}` : 'Reply to a comment'}</Text><Text numberOfLines={2} style={styles.quoteText}>{item.parent_body_preview ?? 'Comment no longer available'}</Text></View> : null}
                 <Text style={styles.replyBody}>{item.body}</Text>
+                <ContentMenu kind="reply" id={item.reply_id} authorId={item.author_id} onChanged={() => void refresh()} />
                 <Pressable accessibilityRole="button" accessibilityLabel={`Reply to ${name}'s comment`} disabled={submitting} onPress={() => { setError(''); setReplyTarget(item); }} style={styles.replyAction}><InkDrawing motif="arrow" size={20} color={colors.accent} /><Text style={styles.replyActionText}>Reply</Text></Pressable>
               </View>
             </View>

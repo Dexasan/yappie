@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandMark } from './Brand';
-import { ArtCanvas, InkDrawing, InkRule, PaperSurface } from './InkArtwork';
+import { ArtCanvas, InkDrawing, InkRule } from './InkArtwork';
 import { Text } from './Typography';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -10,7 +10,7 @@ export function LaunchScreen() {
   const compact = height < 650;
   return <SafeAreaView style={styles.screen}>
     <ArtCanvas />
-    <View style={styles.top}><Text style={styles.edition}>THE GOOD COMPANY CLUB</Text><InkDrawing motif="spark" size={26} color={colors.signal} /></View>
+    <View style={styles.top}><InkDrawing motif="spark" size={26} color={colors.signal} /></View>
     <View style={styles.stage}>
       <View style={[styles.orbit, compact && { height: 150 }]}>
         <View style={styles.planet}><InkDrawing motif="planet" size={compact ? 74 : 96} color={colors.cobalt} /></View>
@@ -18,11 +18,9 @@ export function LaunchScreen() {
         <View style={styles.flower}><InkDrawing motif="flower" size={compact ? 62 : 84} color={colors.signal} /></View>
       </View>
       <Text style={[styles.title, compact && { fontSize: 84, lineHeight: 88 }]}>YAPPIE<Text style={styles.dot}>.</Text></Text>
-      <Text style={styles.tagline}>A little hello.<Text style={styles.secondLine}>{'\n'}A whole new world.</Text></Text>
-      <View style={styles.note}><PaperSurface variant="letter" /><Text style={styles.noteText}>come as you are.</Text><InkDrawing motif="heart" size={26} color={colors.accent} /></View>
     </View>
     <View accessibilityRole="progressbar" accessibilityLabel="Loading Yappie" accessibilityLiveRegion="polite" style={styles.footer}>
-      <InkRule /><View style={styles.loadingRow}><ActivityIndicator color={colors.accent} size="small" /><Text style={styles.loading}>Finding our voice</Text><Text style={styles.dots}>···</Text></View>
+      <InkRule /><View style={styles.loadingRow}><ActivityIndicator color={colors.accent} size="small" /><Text style={styles.loading}>Loading Yappie</Text><Text style={styles.dots}>···</Text></View>
     </View>
   </SafeAreaView>;
 }

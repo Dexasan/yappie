@@ -33,10 +33,11 @@ const plugin = {
     build.onResolve({ filter: /^expo-router$/ }, () => ({ path: path.join(root, 'scripts/ui-review/router.jsx') }));
     build.onResolve({ filter: /^expo-constants$/ }, () => ({ path: 'constants', namespace: 'review-config' }));
     build.onLoad({ filter: /.*/, namespace: 'review-config' }, () => ({ contents: `export default { expoConfig: ${JSON.stringify(JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8')).expo)} };`, loader: 'js' }));
-    build.onResolve({ filter: /^@\/context\/(SessionContext|CallContext)$/ }, () => ({ path: path.join(root, 'scripts/ui-review/context.jsx') }));
+    build.onResolve({ filter: /^@\/context\/(SessionContext|CallContext|ActivityContext)$/ }, () => ({ path: path.join(root, 'scripts/ui-review/context.jsx') }));
     build.onResolve({ filter: /^@\/lib\/supabase$/ }, () => ({ path: 'supabase', namespace: 'mock' }));
     build.onLoad({ filter: /.*/, namespace: 'mock' }, () => ({ contents: 'export const isSupabaseConfigured = true; export const supabase = null;', loader: 'js' }));
-    build.onResolve({ filter: /^@\/features\/.+\/(api|avatar|audio)$/ }, args => ({ path: path.join(root, 'src', args.path.slice(2) + '.ts'), namespace: 'fixture' }));
+    build.onResolve({ filter: /^@\/features\/.+\/(api|avatar|audio|preferences|sessions|moderation)$/ }, args => ({ path: path.join(root, 'src', args.path.slice(2) + '.ts'), namespace: 'fixture' }));
+    build.onResolve({ filter: /^@\/features\/notifications\/device$/ }, () => ({path:path.join(root,'src/features/notifications/device.web.ts')}));
     build.onLoad({ filter: /.*/, namespace: 'fixture' }, args => {
       const source = fs.readFileSync(args.path, 'utf8');
       const names = [...source.matchAll(/export\s+(?:async\s+)?(?:function|const)\s+(\w+)/g)].map(m => m[1]);

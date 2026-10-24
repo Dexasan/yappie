@@ -68,7 +68,6 @@ export default function MessagesScreen() {
     <Screen refreshControl={<RefreshControl colors={[colors.accent]} tintColor={colors.accent} onRefresh={() => void refresh(true)} progressBackgroundColor={colors.surfaceRaised} refreshing={refreshing} />}>
       <RetroHeader compact
         action={<Pressable accessibilityLabel="Start a new message" accessibilityRole="button" onPress={() => router.push('/messages/new')}><RetroGlyph glyph="＋" tone="accent" /></Pressable>}
-        eyebrow="KEEP THE CONVERSATION GOING"
         title="Inbox"
         tone="signal"
       />
@@ -78,7 +77,7 @@ export default function MessagesScreen() {
       {loading ? <SkeletonRows count={4} /> : null}
       {error ? <><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable accessibilityRole="button" onPress={() => void refresh(true)} style={styles.retryButton}><Text style={styles.filterText}>Try again</Text></Pressable></> : null}
       {!loading && !error && conversations.length === 0 ? (
-        <EmptyState action={<PrimaryButton label="Meet someone new" onPress={() => router.push('/(tabs)/quick-chat')} />} description="The best conversations don’t have to end. Meet someone, connect, and pick up right here." glyph="⌁" title="Your next favorite conversation" />
+        <EmptyState action={<PrimaryButton label="Match with strangers" onPress={() => router.push('/(tabs)/quick-chat')} />} description="Start a new message or match with someone in Yap." glyph="⌁" title="No messages yet" />
       ) : null}
       {!loading && !error && conversations.length > 0 && visibleConversations.length === 0 ? <EmptyState description={query ? 'Try a different name or a word from your chat.' : 'You’re all caught up. Your conversations are in All messages.'} glyph={query ? '⌕' : '✓'} title={query ? 'No conversations found' : 'A clean slate'} /> : null}
       <View style={styles.list}>

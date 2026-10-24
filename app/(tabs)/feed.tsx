@@ -2,11 +2,18 @@ import { InkDrawing } from '@/components/InkArtwork';
 import { Text, TextInput } from '@/components/Typography';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Animated, AppState, PanResponder, Pressable, RefreshControl, Share, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, AppState, PanResponder, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 
 import { Avatar, EmptyState, Screen, SkeletonRows } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
-import { createPost, loadFeed, loadFollowingFeed, setPostLiked, subscribeToNewPosts, type FeedPost } from '@/features/feed/api';
+import { useActivity } from '@/context/ActivityContext';
+import { ActivityButton } from '@/components/ActivityButton';
+import { ContentMenu } from '@/components/ContentMenu';
+import * as Linking from 'expo-linking';
+import { useDraft } from '@/lib/use-draft';
+import { trackEvent } from '@/features/analytics/api';
+import { acknowledgeFeed, loadEngagementSummary } from '@/features/activity/api';
+import { createPost, loadDiscoverFeed, loadFollowingFeed, setPostLiked, type FeedPost } from '@/features/feed/api';
 import { colors, fonts, radius, spacing } from '@/theme/tokens';
 
 type FeedMode = 'global' | 'following';
@@ -24,8 +31,9 @@ function relativeTime(value: string) {
 
 export default function FeedScreen() {
   const { profile, user } = useSession();
+  const { summary, refresh: refreshBadges } = useActivity();
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [body, setBody] = useState('');
+  const [body, setBody] = useDraft(user?.id, 'feed');
   const [composerOpen, setComposerOpen] = useState(false);
   const [feedMode, setFeedMode] = useState<FeedMode>('global');
   const [loading, setLoading] = useState(true);
@@ -34,9 +42,13 @@ export default function FeedScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [newPostsAvailable, setNewPostsAvailable] = useState(false);
   const likesInFlight = useRef(new Set<string>());
   const refreshGeneration = useRef(0);
+  const discoverySnapshot = useRef('');
+  const scrollView = useRef<ScrollView>(null);
+  const atTop = useRef(true);
+  const isFocused = useRef(false);
+  const pendingAcknowledgement = useRef<{mode:FeedMode;through:string;generation:number}|null>(null);
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const feedSlideX = useRef(new Animated.Value(0)).current;
   const feedIsSwitching = useRef(false);
@@ -110,13 +122,18 @@ export default function FeedScreen() {
 
   const refresh = useCallback(async (showRefreshIndicator = false) => {
     const generation = ++refreshGeneration.current;
+    setLoadingMore(false);
     if (showRefreshIndicator) setRefreshing(true);
     setError('');
     try {
-      const nextPosts = await (feedMode === 'following' ? loadFollowingFeed() : loadFeed());
+      const snapshot = await loadEngagementSummary();
+      const nextPosts = await (feedMode === 'following' ? loadFollowingFeed() : loadDiscoverFeed(snapshot.checked_at));
       if (generation !== refreshGeneration.current) return;
+      scrollView.current?.scrollTo({y:0,animated:false});
+      atTop.current=true;
+      pendingAcknowledgement.current={mode:feedMode,through:snapshot.checked_at,generation};
       setPosts(nextPosts);
-      setNewPostsAvailable(false);
+      discoverySnapshot.current = snapshot.checked_at;
       setHasMore(nextPosts.length === 30);
     } catch (nextError) {
       if (generation !== refreshGeneration.current) return;
@@ -127,13 +144,19 @@ export default function FeedScreen() {
         setRefreshing(false);
       }
     }
-  }, [feedMode]);
+  }, [feedMode, refreshBadges]);
 
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useEffect(()=>{
+    const pending=pendingAcknowledgement.current;
+    if(!pending || !isFocused.current || !appIsActive || !atTop.current || pending.generation!==refreshGeneration.current)return;
+    pendingAcknowledgement.current=null;
+    void acknowledgeFeed(pending.mode,pending.through).then(refreshBadges).catch(()=>{});
+  },[posts,appIsActive,refreshBadges]);
 
   useFocusEffect(useCallback(() => {
-    if (!appIsActive) return;
-    return subscribeToNewPosts(() => setNewPostsAvailable(true));
+    isFocused.current=true;
+    if (appIsActive && atTop.current) void refresh();
+    return () => { isFocused.current=false; ++refreshGeneration.current; };
   }, [appIsActive, refresh]));
 
   const publish = async () => {
@@ -142,6 +165,7 @@ export default function FeedScreen() {
     setError('');
     try {
       await createPost(user.id, body);
+      trackEvent('post_published','feed');
       setBody('');
       setComposerOpen(false);
       if (feedMode !== 'global') setFeedMode('global');
@@ -174,9 +198,11 @@ export default function FeedScreen() {
     const oldestPost = posts.at(-1);
     if (!oldestPost || !hasMore || loadingMore) return;
     setLoadingMore(true);
+    const generation = refreshGeneration.current;
     setError('');
     try {
-      const olderPosts = await (feedMode === 'following' ? loadFollowingFeed(oldestPost.created_at) : loadFeed(oldestPost.created_at));
+      const olderPosts = await (feedMode === 'following' ? loadFollowingFeed(oldestPost.created_at) : loadDiscoverFeed(discoverySnapshot.current, oldestPost));
+      if (generation !== refreshGeneration.current) return;
       setPosts((current) => {
         const existingIds = new Set(current.map((item) => item.post_id));
         return [...current, ...olderPosts.filter((item) => !existingIds.has(item.post_id))];
@@ -185,13 +211,13 @@ export default function FeedScreen() {
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Could not load older posts.');
     } finally {
-      setLoadingMore(false);
+      if (generation === refreshGeneration.current) setLoadingMore(false);
     }
   };
 
   const sharePost = async (post: FeedPost, authorName: string) => {
     try {
-      await Share.share({ message: `${post.body}\n\n— ${authorName} on YAPPIE` });
+      await Share.share({ message: `${post.body}\n\n— ${authorName} on YAPPIE\n${Linking.createURL(`/post/${post.post_id}`)}` });
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Could not open the share menu.');
     }
@@ -203,8 +229,8 @@ export default function FeedScreen() {
   });
 
   return (
-    <Screen contentStyle={{paddingTop:0}} refreshControl={<RefreshControl colors={[colors.accent]} onRefresh={() => void refresh(true)} progressBackgroundColor={colors.surfaceRaised} refreshing={refreshing} tintColor={colors.accent} />}>
-<View style={styles.compactHeader}><View style={{flexDirection:"row",alignItems:"center",gap:10}}><InkDrawing motif="eye" size={36} /><Text style={styles.compactTitle}>DISCOVER</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => router.push('/(tabs)/profile')}><Avatar label={profile?.displayName || 'You'} path={profile?.avatarPath} size={34} /></Pressable></View>
+    <Screen scrollViewRef={scrollView} onScroll={event=>{atTop.current=event.nativeEvent.contentOffset.y<24;}} contentStyle={{paddingTop:0}} refreshControl={<RefreshControl colors={[colors.accent]} onRefresh={() => void refresh(true)} progressBackgroundColor={colors.surfaceRaised} refreshing={refreshing} tintColor={colors.accent} />}>
+<View style={styles.compactHeader}><View style={{flexDirection:"row",alignItems:"center",gap:10}}><InkDrawing motif="eye" size={36} /><Text style={styles.compactTitle}>DISCOVER</Text></View><View style={{ flexDirection: 'row', alignItems: 'center' }}><ActivityButton compact /><Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => router.push('/(tabs)/profile')}><Avatar label={profile?.displayName || 'You'} path={profile?.avatarPath} size={34} /></Pressable></View></View>
       <View style={styles.topBar}>
         <View style={styles.feedModeRow}>
           {(['global', 'following'] as const).map((mode) => (
@@ -215,13 +241,13 @@ export default function FeedScreen() {
               onPress={() => switchFeedMode(mode)}
               style={[styles.feedModeButton, feedMode === mode && styles.feedModeSelected]}
             >
-              <Text style={[styles.feedModeLabel, feedMode === mode && styles.feedModeLabelSelected]}>{mode === 'global' ? 'For you' : 'Following'}</Text>
+              <Text style={[styles.feedModeLabel, feedMode === mode && styles.feedModeLabelSelected]}>{mode === 'global' ? 'For you' : 'Following'}{(mode === 'global' ? summary?.global_new : summary?.following_new) ? ' •' : ''}</Text>
             </Pressable>
           ))}
         </View>
       </View>
 
-      {newPostsAvailable ? <Pressable accessibilityRole="button" accessibilityLabel="Show new posts" onPress={() => void refresh(true)} style={styles.newPostsButton}><Text style={styles.newPostsLabel}>↑  New conversations · Tap to refresh</Text></Pressable> : null}
+      {(feedMode === 'global' ? summary?.global_new : summary?.following_new) ? <Pressable accessibilityRole="button" accessibilityLabel="Show new posts" onPress={() => void refresh(true)} style={styles.newPostsButton}><Text style={styles.newPostsLabel}>↑  New conversations · Tap to refresh</Text></Pressable> : null}
 
       <Animated.View
         {...feedSwipeResponder.panHandlers}
@@ -280,6 +306,7 @@ export default function FeedScreen() {
                   <Text style={styles.postBody}>{post.body}</Text>
                 </Pressable>
                 <View style={styles.actions}>
+                  <ContentMenu id={post.post_id} authorId={post.author_id} onChanged={() => void refresh()} />
                   <Pressable accessibilityRole="button" hitSlop={3} accessibilityState={{ selected: post.liked_by_me }} accessibilityLabel={post.liked_by_me ? 'Unlike post' : 'Like post'} onPress={() => void toggleLike(post)} style={({ pressed }) => [styles.actionButton, pressed && styles.actionPressed]}>
                     <InkDrawing motif="heart" size={25} color={post.liked_by_me ? colors.accent : colors.textMuted} /><Text style={[styles.actionText, post.liked_by_me && styles.actionLiked]}>{post.like_count}</Text>
                   </Pressable>

@@ -20,6 +20,7 @@ import {
 } from '@/features/calls/api';
 import { blockProfile, reportProfile } from '@/features/quick-chat/api';
 import { colors, fonts, radius, shadows, spacing } from '@/theme/tokens';
+import { trackEvent } from '@/features/analytics/api';
 
 const terminalStatuses: CallStatus[] = ['declined', 'cancelled', 'missed', 'ended'];
 
@@ -52,6 +53,7 @@ export default function DirectCallScreen() {
   const callStatusRef = useRef<CallStatus | null>(null);
   const leavingRef = useRef(false);
   const audio = useDirectCallAudio(callId, call?.status === 'accepted');
+  useEffect(()=>{if(audio.error)trackEvent('audio_failed','calls');},[audio.error]);
 
   useEffect(() => {
     if (!callId || !user || !appIsActive) return;

@@ -77,12 +77,6 @@ export default function SafetySettingsScreen() {
         <View style={styles.topSpacer} />
       </View>
 
-      <View style={styles.hero}>
-        <InkDrawing motif="shield" size={96} color={colors.signal} />
-        <Text style={styles.heroTitle}>You control the door.</Text>
-        <Muted style={styles.heroCopy}>Set who can reach your inbox and revisit accounts you have blocked.</Muted>
-      </View>
-
       <SectionHeader title="Who can message me" />
       <Card style={styles.choiceCard}>
         {permissionChoices.map((choice, index) => {

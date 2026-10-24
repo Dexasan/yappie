@@ -8,6 +8,8 @@ import { authCallbackUrl, handleAuthCallbackUrl } from '@/lib/auth-callback';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import type { Profile } from '@/types/models';
+import { unregisterDevice } from '@/features/notifications/device';
+import { clearAccountDrafts } from '@/lib/use-draft';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
@@ -201,6 +203,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       },
       signOut: async () => {
         if (!supabase) return;
+        await unregisterDevice();
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
       },
@@ -248,6 +251,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         if (error) throw error;
 
         await supabase.auth.signOut({ scope: 'local' });
+        await clearAccountDrafts(session.user.id).catch(()=>{});
         setIsPasswordRecovery(false);
         setProfile(null);
         setOnboardingComplete(false);

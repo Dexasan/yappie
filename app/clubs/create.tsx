@@ -62,12 +62,12 @@ export default function CreateClubScreen() {
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backGlyph}>‹</Text><Text style={styles.backLabel}>Clubs</Text>
         </Pressable>
-        <Text style={styles.step}>New community</Text>
+        <Text style={styles.step}>New club</Text>
       </View>
 
       <View style={styles.hero}>
         <Eyebrow>Build your corner</Eyebrow>
-        <Heading compact>Start a club people return to.</Heading>
+        <Heading compact>Create a club</Heading>
         <Muted>Choose a clear theme. You’ll become the owner and can invite moderators later.</Muted>
       </View>
 

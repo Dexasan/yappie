@@ -110,7 +110,6 @@ export function GiftPicker({
               <View style={styles.previewCopy}>
                 <Text style={[styles.giftLabel, { color: giftPresentation(selectedGift.slug).accent }]}>{giftPresentation(selectedGift.slug).label}</Text>
                 <Text style={styles.previewTitle}>{selectedGift.name}</Text>
-                <Text style={styles.tagline}>{giftPresentation(selectedGift.slug).tagline}</Text>
                 {checkoutEnabled ? (
                   <>
                     <View style={styles.splitRow}>

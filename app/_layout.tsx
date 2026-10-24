@@ -16,9 +16,21 @@ import { InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument
 
 import { SessionProvider } from '@/context/SessionContext';
 import { CallProvider } from '@/context/CallContext';
+import { ActivityProvider } from '@/context/ActivityContext';
+import { NotificationProvider } from '@/context/NotificationContext';
+import { AnalyticsProvider } from '@/context/AnalyticsContext';
+import { trackEvent } from '@/features/analytics/api';
+import type { ErrorBoundaryProps } from 'expo-router';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { colors, fonts } from '@/theme/tokens';
 
 void SplashScreen.preventAutoHideAsync();
+
+export function ErrorBoundary({retry}:ErrorBoundaryProps) {
+  useEffect(()=>{trackEvent('render_error','app');},[]);
+  return <View style={{flex:1,justifyContent:'center',padding:32,backgroundColor:colors.background}}><Text style={{color:colors.text,fontSize:22}}>Something went wrong.</Text><Pressable accessibilityRole="button" onPress={retry} style={{paddingVertical:20}}><Text style={{color:colors.accent}}>Try again</Text></Pressable></View>;
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ BarlowCondensed_700Bold, DMSans_400Regular, DMSans_500Medium, DMSans_700Bold, InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic });
@@ -34,10 +46,16 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <SessionProvider>
+        <AnalyticsProvider>
+        <ActivityProvider>
+        <NotificationProvider>
         <CallProvider>
           <StatusBar style="light" />
           <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background }, headerShown: false }} />
         </CallProvider>
+        </NotificationProvider>
+        </ActivityProvider>
+        </AnalyticsProvider>
       </SessionProvider>
     </SafeAreaProvider>
   );

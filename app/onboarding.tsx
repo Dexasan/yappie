@@ -111,12 +111,11 @@ export default function OnboardingScreen() {
       <BrandLockup compact />
       <View style={styles.topRow}>
         <View style={styles.progressTrack}><View style={styles.progressFill} /></View>
-        <Text style={styles.step}>Almost there</Text>
       </View>
       <View style={styles.intro}>
         <Eyebrow>Make your first impression</Eyebrow>
-        <Heading>Give strangers a reason to say hey.</Heading>
-        <Muted>Your email and birth date stay private. The rest helps the right conversations find you.</Muted>
+        <Heading>Set up your profile</Heading>
+        <Muted>Your email and birth date stay private.</Muted>
       </View>
 
       <Card style={styles.form}>
@@ -228,7 +227,7 @@ export default function OnboardingScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
 
-      <PrimaryButton disabled={!canContinue} label={submitting ? 'Saving profile…' : 'Start yapping'} onPress={finish} />
+      <PrimaryButton disabled={!canContinue} label={submitting ? 'Saving profile…' : 'Continue'} onPress={finish} />
       <Text style={styles.privacy}>Your precise location is never collected or displayed.</Text>
     </Screen>
   );

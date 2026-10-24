@@ -1,6 +1,6 @@
 import { InkDrawing, PaperSurface } from '@/components/InkArtwork';
 import { Text, TextInput } from '@/components/Typography';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -19,19 +19,32 @@ export default function ClubsScreen() {
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [membersOnly, setMembersOnly] = useState(false);
+  const [hasMore,setHasMore]=useState(false);
+  const [loadingMore,setLoadingMore]=useState(false);
+  const generation=useRef(0);
 
   const refresh = useCallback(async () => {
+    const request=++generation.current;
     setError('');
     try {
-      setClubs(await loadClubs());
+      const rows=await loadClubs(query,0,membersOnly);
+      if(request!==generation.current)return;
+      setClubs(rows);setHasMore(rows.length===30);
     } catch (nextError) {
+      if(request!==generation.current)return;
       setError(nextError instanceof Error ? nextError.message : 'Could not load clubs.');
     } finally {
-      setLoading(false);
+      if(request===generation.current)setLoading(false);
     }
-  }, []);
+  }, [query,membersOnly]);
 
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { const timer=setTimeout(()=>void refresh(),200);return ()=>{clearTimeout(timer);++generation.current;}; }, [refresh]));
+  const loadMore=async()=>{
+    if(loadingMore)return;setLoadingMore(true);const request=generation.current;
+    try{const rows=await loadClubs(query,clubs.length,membersOnly);if(request!==generation.current)return;setClubs(old=>[...old,...rows.filter(row=>!old.some(c=>c.club_id===row.club_id))]);setHasMore(rows.length===30);}
+    catch(e){if(request===generation.current)setError(e instanceof Error?e.message:'Could not load more clubs.');}
+    finally{setLoadingMore(false);}
+  };
 
   const toggleMembership = async (club: ClubSummary) => {
     setBusyClubId(club.club_id);
@@ -75,15 +88,13 @@ export default function ClubsScreen() {
     <Screen>
       <RetroHeader compact
         action={<Pressable accessibilityLabel="Create a club" accessibilityRole="button" onPress={() => router.push('/clubs/create')} style={styles.createButton}><RetroGlyph glyph="＋" tone="accent" /></Pressable>}
-        eyebrow="THERE’S A PLACE FOR YOUR PEOPLE"
         title="Clubs"
         tone="warning"
       />
-      <View style={styles.artIntro}><Text style={[styles.introCopy, {flex:1}]}>Small worlds. Your people.</Text><InkDrawing motif="planet" size={38} color={colors.warning} /></View>
 
       <View style={styles.searchWrap}>
         <Text style={styles.searchGlyph}>⌕</Text>
-        <TextInput accessibilityLabel="Search clubs" autoCapitalize="none" onChangeText={setQuery} placeholder="Search communities" placeholderTextColor={colors.textSubtle} style={styles.searchInput} value={query} />
+        <TextInput accessibilityLabel="Search clubs" autoCapitalize="none" onChangeText={setQuery} placeholder="Search clubs" placeholderTextColor={colors.textSubtle} style={styles.searchInput} value={query} />
         {query ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setQuery('')} style={styles.clearButton}><Text style={styles.clearSearch}>×</Text></Pressable> : null}
       </View>
       <View style={styles.filters}>{[false, true].map((onlyMine) => <Pressable key={String(onlyMine)} accessibilityRole="tab" accessibilityState={{ selected: membersOnly === onlyMine }} onPress={() => setMembersOnly(onlyMine)} style={[styles.filter, membersOnly === onlyMine && styles.filterSelected]}><Text style={[styles.filterText, membersOnly === onlyMine && styles.filterTextSelected]}>{onlyMine ? 'My clubs' : 'Explore'}</Text></Pressable>)}</View>
@@ -102,7 +113,7 @@ export default function ClubsScreen() {
                   onPress={() => router.push({ pathname: '/clubs/room/[roomId]', params: { roomId: club.live_room_id! } })}
                   style={({ pressed }) => [styles.liveCard, pressed && styles.pressed]}
                 ><PaperSurface variant="ticket" color={colors.accentSoft} ink={colors.accentSolid} />
-                  <View style={styles.liveTop}><View style={styles.liveLabel}><View style={styles.liveDot} /><Text style={styles.liveLabelText}>ON AIR</Text></View><Text numberOfLines={1} style={styles.liveClubName}>{club.name}</Text></View>
+                  <View style={styles.liveTop}><View style={styles.liveLabel}><View style={styles.liveDot} /><Text style={styles.liveLabelText}>LIVE</Text></View><Text numberOfLines={1} style={styles.liveClubName}>{club.name}</Text></View>
                   <Text numberOfLines={1} style={styles.roomTitle}>{club.live_room_title}</Text>
                   <View style={styles.listenerRow}><Text style={styles.listenerCopy}>{club.live_listener_count} listening</Text><Text style={styles.enterArrow}>→</Text></View>
                 </Pressable>
@@ -112,8 +123,8 @@ export default function ClubsScreen() {
         </>
       ) : null}
 
-      {!loading ? <View style={styles.sectionLine}><View style={styles.sectionLead}><RetroGlyph glyph="✦" size="sm" /><Text style={styles.sectionTitle}>{query ? 'Results' : 'Find your people'}</Text></View><Text style={styles.sectionCount}>{visibleClubs.length} clubs</Text></View> : null}
-      {!loading && !error && visibleClubs.length === 0 ? <EmptyState description={membersOnly ? 'Explore the clubs and join a few that feel like you.' : 'Try another word or create the community you wish existed.'} glyph="⌕" title={membersOnly ? 'Make yourself at home' : 'No clubs found'} /> : null}
+      {!loading ? <View style={styles.sectionLine}><View style={styles.sectionLead}><RetroGlyph glyph="✦" size="sm" /><Text style={styles.sectionTitle}>{query ? 'Search results' : membersOnly ? 'My clubs' : 'All clubs'}</Text></View><Text style={styles.sectionCount}>{visibleClubs.length} clubs</Text></View> : null}
+      {!loading && !error && visibleClubs.length === 0 ? <EmptyState description={membersOnly ? 'Join a club from the Explore tab.' : 'Try another search or create a club.'} glyph="⌕" title={membersOnly ? 'No clubs joined' : 'No clubs found'} /> : null}
 
       <View style={styles.clubGrid}>
         {visibleClubs.map((club, index) => (
@@ -136,9 +147,10 @@ export default function ClubsScreen() {
         ))}
       </View>
 
+      {hasMore?<Pressable disabled={loadingMore} onPress={()=>void loadMore()} style={{padding:16}}><Text style={{color:colors.accent}}>{loadingMore?'Loading…':'Show more clubs'}</Text></Pressable>:null}
       {hostingClub ? (
         <View style={styles.hostPanel}>
-          <View style={styles.hostPanelTop}><View><Text style={styles.hostTitle}>Go live in {hostingClub.name}</Text><Text style={styles.hostHint}>Give people a reason to tap in.</Text></View><Pressable onPress={() => setHostingClubId(null)}><Text style={styles.hostClose}>×</Text></Pressable></View>
+          <View style={styles.hostPanelTop}><View><Text style={styles.hostTitle}>Start a room in {hostingClub.name}</Text><Text style={styles.hostHint}>Enter a room title.</Text></View><Pressable onPress={() => setHostingClubId(null)}><Text style={styles.hostClose}>×</Text></Pressable></View>
           <TextInput autoFocus maxLength={80} onChangeText={setRoomTitle} placeholder="What are you talking about?" placeholderTextColor={colors.textSubtle} style={styles.roomInput} value={roomTitle} />
           <Pressable disabled={!roomTitle.trim() || busyClubId === hostingClub.club_id} onPress={() => void startRoom(hostingClub)} style={[styles.startButton, (!roomTitle.trim() || busyClubId === hostingClub.club_id) && styles.disabled]}>
             <Text style={styles.startLabel}>{busyClubId === hostingClub.club_id ? 'Starting…' : 'Start live room'}</Text>
@@ -151,7 +163,6 @@ export default function ClubsScreen() {
 
 const styles = StyleSheet.create({
   clubHeading: {flexDirection:'row',alignItems:'center',gap:7},
-  artIntro: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   searchGlyph: { color: colors.textSubtle, fontSize: 25 },
   filters: { flexDirection: 'row', gap: 8, marginTop: 6 },
   filter: { borderRadius: 40, paddingHorizontal: 22, minHeight: 44, justifyContent: 'center' },
@@ -159,7 +170,6 @@ const styles = StyleSheet.create({
   filterText: { color: colors.textSubtle, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
   filterTextSelected: { color: colors.primaryInk, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
   retryButton: { alignSelf: 'center', padding: 16 },
-  introCopy: { color: colors.textMuted, fontFamily: fonts.italic, fontSize: 23, lineHeight: 28 },
   clearButton: { alignItems: 'center', justifyContent: 'center', minHeight: 44, width: 32 },
   createButton: { borderRadius: 10 },
   searchWrap: { alignItems: 'center', borderColor: colors.borderStrong, borderBottomWidth: 1, flexDirection: 'row', gap: 10, marginTop: 2, paddingHorizontal: 2 },

@@ -23,6 +23,9 @@ import {
 import { setPostLiked } from '@/features/feed/api';
 import { chooseClubAvatar, clubAvatarPublicUrl, uploadClubAvatar } from '@/features/clubs/avatar';
 import { colors, fonts, radius, spacing } from '@/theme/tokens';
+import { ClubSessions } from '@/components/ClubSessions';
+import { ContentMenu } from '@/components/ContentMenu';
+import { useDraft } from '@/lib/use-draft';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -44,7 +47,7 @@ export default function ClubDetailScreen() {
   const [club, setClub] = useState<ClubDetail | null>(null);
   const [members, setMembers] = useState<ClubMember[]>([]);
   const [posts, setPosts] = useState<ClubPost[]>([]);
-  const [postBody, setPostBody] = useState('');
+  const [postBody, setPostBody] = useDraft(user?.id, `club:${clubId}`);
   const [roomTitle, setRoomTitle] = useState('');
   const [showRoomForm, setShowRoomForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -269,6 +272,7 @@ export default function ClubDetailScreen() {
         </Card>
       ) : null}
 
+      {clubId ? <ClubSessions clubId={clubId} canHost={canHost} isMember={club.is_member} /> : null}
       <SectionHeader title="Club conversation" />
       {club.is_member ? (
         <Card style={styles.composer}>
@@ -310,6 +314,7 @@ export default function ClubDetailScreen() {
               </Pressable>
               <Text style={styles.postBody}>{post.body}</Text>
               <View style={styles.postActions}>
+                <ContentMenu id={post.post_id} authorId={post.author_id} onChanged={() => void refresh()} />
                 <Pressable onPress={() => void toggleLike(post)} style={[styles.postAction, post.liked_by_me && styles.likedAction]}>
                   <Text style={[styles.postActionLabel, post.liked_by_me && styles.likedLabel]}>{post.liked_by_me ? '♥' : '♡'} {post.like_count}</Text>
                 </Pressable>

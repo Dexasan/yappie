@@ -8,6 +8,7 @@ import type { Href } from 'expo-router';
 import { GiftArtwork } from '@/components/GiftArtwork';
 import { Avatar, RetroGlyph, RetroHeader, Screen } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
+import { isModerator } from '@/features/safety/moderation';
 import { formatUsd, giftCheckoutEnabled, loadEarningsWallet, loadProfileGifts, type EarningsWallet, type ProfileGift } from '@/features/gifts/api';
 import { loadOwnSocialStats, type SocialStats } from '@/features/social/api';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -26,11 +27,14 @@ export default function ProfileScreen() {
   const { profile, signOut, user } = useSession();
   const checkoutEnabled = giftCheckoutEnabled();
   const [stats, setStats] = useState<SocialStats | null>(null);
+  const [moderator,setModerator]=useState(false);
   const [wallet, setWallet] = useState<EarningsWallet | null>(null);
   const [receivedGifts, setReceivedGifts] = useState<ProfileGift[]>([]);
 
   useFocusEffect(useCallback(() => {
     let active = true;
+    setModerator(false);
+    void isModerator().then(value=>{if(active)setModerator(value);}).catch(()=>{});
     if (!user || !isSupabaseConfigured) {
       setStats({ followers: 0, following: 0, posts: 0 });
       setReceivedGifts([]);
@@ -58,18 +62,17 @@ export default function ProfileScreen() {
   return (
     <Screen>
       <RetroHeader compact
-        action={<Pressable accessibilityLabel="Account settings" accessibilityRole="button" onPress={() => router.push('/settings/account')}><RetroGlyph glyph="⚙" tone="neutral" /></Pressable>}
-        eyebrow="A LITTLE MORE YOU"
+        action={<Pressable accessibilityLabel="Settings" accessibilityRole="button" onPress={() => router.push('/settings/account')}><RetroGlyph glyph="⚙" tone="neutral" /></Pressable>}
         title="Your profile"
         tone="accent"
       />
 
       <View style={styles.profileHeader}>
-        <PaperSurface variant="oval" color={colors.accentSoft} ink={colors.accentSolid} /><View pointerEvents="none" style={styles.portraitFlower}><InkDrawing motif="flower" size={64} color={colors.accent} /></View><View pointerEvents="none" style={styles.portraitStar}><InkDrawing motif="spark" size={44} color={colors.warning} /></View><Text style={styles.portraitCaption}>One of a kind.</Text>
+        <PaperSurface variant="oval" color={colors.accentSoft} ink={colors.accentSolid} /><View pointerEvents="none" style={styles.portraitFlower}><InkDrawing motif="flower" size={64} color={colors.accent} /></View><View pointerEvents="none" style={styles.portraitStar}><InkDrawing motif="spark" size={44} color={colors.warning} /></View>
         <View style={styles.avatarFrame}><Avatar label={profile.displayName} path={profile.avatarPath} size={72} /></View>
         <Text style={styles.profileName}>{profile.displayName}</Text>
         <Text style={styles.profileHandle}>@{profile.handle}</Text>
-        <Text style={styles.bio}>{profile.bio || 'Here for good conversations and unexpected connections.'}</Text>
+        {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
         <Pressable accessibilityRole="button" onPress={() => router.push('/profile/edit')} style={styles.editButton}><Text style={styles.editLabel}>Edit profile</Text></Pressable>
       </View>
 
@@ -98,7 +101,7 @@ export default function ProfileScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.walletKicker}>{checkoutEnabled ? 'GIFT EARNINGS' : 'GIFT LAB · FREE BETA'}</Text>
           <Text style={styles.walletTitle}>{checkoutEnabled ? wallet ? formatUsd(wallet.available_cents) : 'Your wallet' : 'Preview the collection'}</Text>
-          <Text style={styles.walletMeta}>{checkoutEnabled ? wallet?.pending_cents ? `${formatUsd(wallet.pending_cents)} pending · withdraw at $100` : receivedGifts.length ? `${receivedGifts.length} recent gift${receivedGifts.length === 1 ? '' : 's'} received` : 'Half of every gift goes to you' : 'Little ways to make someone’s day. Coming after beta.'}</Text>
+          <Text style={styles.walletMeta}>{checkoutEnabled ? wallet?.pending_cents ? `${formatUsd(wallet.pending_cents)} pending · withdraw at $100` : receivedGifts.length ? `${receivedGifts.length} recent gift${receivedGifts.length === 1 ? '' : 's'} received` : 'Half of every gift goes to you' : 'Gifting is unavailable during the free beta.'}</Text>
         </View>
         <InkDrawing motif="gift" size={64} color={colors.warning} />
       </Pressable>
@@ -128,20 +131,24 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <Pressable accessibilityRole="button" onPress={() => router.push('/wallet' as Href)} style={styles.noGifts}>
-            <InkDrawing motif="gift" size={58} color={colors.warning} /><Text style={styles.noGiftsText}>{checkoutEnabled ? 'Your received gifts will appear here.' : 'A little something, just for you. Explore the upcoming collection.'}</Text>
+            <InkDrawing motif="gift" size={58} color={colors.warning} /><Text style={styles.noGiftsText}>{checkoutEnabled ? 'Your received gifts will appear here.' : 'No gifts received. Gifting is unavailable during the free beta.'}</Text>
           </Pressable>
         )}
       </View>
 
       <View style={styles.utilityRow}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Saved posts" onPress={() => router.push('/saved')} style={styles.utilityButton}><PaperSurface variant="oval" color={colors.warningSoft} ink={colors.warning} />
+          <InkDrawing motif="bookmark" size={40} color={colors.warning} /><View style={styles.utilityCopy}><Text style={styles.utilityTitle}>Saved</Text><Text style={styles.utilityMeta}>Saved posts</Text></View>
+        </Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push('/settings/safety')} style={styles.utilityButton}><PaperSurface variant="oval" color={colors.signalSoft} ink={colors.signal} />
           <InkDrawing motif="shield" size={40} color={colors.signal} /><View style={styles.utilityCopy}><Text style={styles.utilityTitle}>Safety</Text><Text style={styles.utilityMeta}>Privacy & blocks</Text></View>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/legal/[document]', params: { document: 'community-guidelines' } })} style={styles.utilityButton}><PaperSurface variant="oval" color={colors.cobaltSoft} ink={colors.cobalt} />
-          <InkDrawing motif="book" size={40} color={colors.cobalt} /><View style={styles.utilityCopy}><Text style={styles.utilityTitle}>Guidelines</Text><Text style={styles.utilityMeta}>How YAPPIE works</Text></View>
+          <InkDrawing motif="book" size={40} color={colors.cobalt} /><View style={styles.utilityCopy}><Text style={styles.utilityTitle}>Guidelines</Text><Text style={styles.utilityMeta}>Community rules</Text></View>
         </Pressable>
       </View>
 
+      {moderator ? <Pressable accessibilityRole="button" onPress={() => router.push('/moderation')} style={styles.moderationLink}><InkDrawing motif="shield" size={30} color={colors.signal} /><Text style={styles.moderationLabel}>Review reports</Text><Text style={styles.moderationLabel}>↗</Text></Pressable> : null}
       <View style={styles.accountFooter}>
         <Text numberOfLines={1} style={styles.email}>{user?.email ?? 'Authenticated account'}</Text>
         <Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOutButton}><Text style={styles.signOutText}>Sign out</Text></Pressable>
@@ -188,10 +195,12 @@ const styles = StyleSheet.create({
   noGifts: { alignItems: 'center', flexDirection: 'row', gap: 12, paddingVertical: 10 },
   noGiftsText: { color: colors.textMuted, flex: 1, fontFamily: fonts.italic, fontSize: 21, lineHeight: 26 },
   utilityRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
-  utilityButton: { alignItems: 'center', flex: 1, gap: 6, minHeight: 126, paddingHorizontal: 12, paddingVertical: 18 },
+  utilityButton: { alignItems: 'center', flex: 1, minWidth: 0, gap: 6, minHeight: 126, paddingHorizontal: 6, paddingVertical: 18 },
   utilityCopy: { alignItems: 'center' },
-  utilityTitle: { color: colors.text, fontFamily: fonts.editorial, fontSize: 23 },
+  utilityTitle: { color: colors.text, fontFamily: fonts.editorial, fontSize: 21 },
   utilityMeta: { color: colors.textMuted, fontSize: 10, marginTop: 5, textAlign: 'center' },
+  moderationLink: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, marginTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  moderationLabel: { color: colors.signal, fontFamily: fonts.display, fontSize: 20 },
   accountFooter: { alignItems: 'center', borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between', marginTop: spacing.lg, paddingTop: spacing.md },
   email: { color: colors.textSubtle, flex: 1, fontSize: 13 },
   signOutButton: { borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, paddingHorizontal: spacing.lg, paddingVertical: 10 },

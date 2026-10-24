@@ -1,7 +1,7 @@
 import { Text, TextInput } from '@/components/Typography';
-import { useEffect, useRef, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Redirect, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Alert, AppState, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GiftPicker } from '@/components/GiftPicker';
@@ -9,17 +9,19 @@ import { GiftArtwork } from '@/components/GiftArtwork';
 import { Avatar, Muted } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
 import { giftCheckoutEnabled } from '@/features/gifts/api';
-import { markConversationRead } from '@/features/messages/api';
+import { acknowledgeConversation, loadConversationPartner } from '@/features/messages/api';
 import {
   blockProfile,
   loadConversationMessages,
   reportProfile,
   sendConversationMessage,
   subscribeToConversationMessages,
-  loadPublicProfile,
   type Message,
 } from '@/features/quick-chat/api';
 import { colors, spacing } from '@/theme/tokens';
+import { useDraft } from '@/lib/use-draft';
+import { useActivity } from '@/context/ActivityContext';
+import { trackEvent } from '@/features/analytics/api';
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -28,54 +30,64 @@ function first(value: string | string[] | undefined) {
 export default function DirectConversationScreen() {
   const params = useLocalSearchParams<{ conversationId: string; partnerId: string; partnerName: string }>();
   const conversationId = first(params.conversationId);
-  const partnerId = first(params.partnerId);
-  const partnerName = first(params.partnerName) ?? 'Connection';
-  const { user } = useSession();
+  const [partner,setPartner]=useState<Awaited<ReturnType<typeof loadConversationPartner>>|null>(null);
+  const partnerId=partner?.user_id;
+  const partnerName=partner?.display_name ?? partner?.handle ?? 'Connection';
+  const { user, isLoading } = useSession();
+  const { refresh: refreshBadges } = useActivity();
   const checkoutEnabled = giftCheckoutEnabled();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useDraft(user?.id, `message:${conversationId}`);
   const [sending, setSending] = useState(false);
   const [giftPickerVisible, setGiftPickerVisible] = useState(false);
   const [error, setError] = useState('');
   const [partnerAvatarPath, setPartnerAvatarPath] = useState<string | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
+  const focused=useRef(false);
+  const [appActive,setAppActive]=useState(AppState.currentState==='active');
+  useEffect(()=>{const subscription=AppState.addEventListener('change',state=>setAppActive(state==='active'));return ()=>subscription.remove();},[]);
 
   const addMessage = (message: Message) => {
     setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
   };
 
-  useEffect(() => {
-    if (!conversationId) return;
+  useFocusEffect(useCallback(() => {
+    if (!conversationId || !user || !appActive) return;
+    focused.current=true;
     let active = true;
     setMessages([]);
+    setPartner(null);
     setPartnerAvatarPath(null);
     setError('');
-    void loadConversationMessages(conversationId)
-      .then((data) => {
+    void Promise.all([loadConversationMessages(conversationId),loadConversationPartner(conversationId)])
+      .then(([data,nextPartner]) => {
         if (!active) return;
-        setMessages(data);
-        void markConversationRead(conversationId).catch(() => undefined);
+        setMessages(current=>[...data,...current.filter(item=>!data.some(old=>old.id===item.id))].sort((a,b)=>a.created_at.localeCompare(b.created_at)));
+        setPartner(nextPartner);
+        setPartnerAvatarPath(nextPartner.avatar_path);
       })
       .catch((nextError: unknown) => { if (active) setError(nextError instanceof Error ? nextError.message : 'Could not load messages.'); });
-    if (partnerId) {
-      void loadPublicProfile(partnerId).then((profile) => {
-        if (active) setPartnerAvatarPath(profile.avatar_path);
-      }).catch(() => undefined);
-    }
     const unsubscribe = subscribeToConversationMessages(conversationId, (message) => {
       if (!active) return;
       addMessage(message);
-      void markConversationRead(conversationId).catch(() => undefined);
     });
     return () => {
       active = false;
+      focused.current=false;
       unsubscribe();
     };
-  }, [conversationId, partnerId]);
+  }, [conversationId, user?.id, appActive]));
+
+  useEffect(()=>{
+    const newest=messages.at(-1);
+    if(conversationId && newest && focused.current && appActive) void acknowledgeConversation(conversationId,newest.created_at).then(refreshBadges).catch(()=>{});
+  },[conversationId,messages,appActive,refreshBadges]);
 
   useEffect(() => {
     if (messages.length) listRef.current?.scrollToEnd({ animated: true });
   }, [messages.length]);
+
+  if (!isLoading && !user) return <Redirect href={{pathname:'/auth',params:{returnTo:`/messages/${conversationId}`}}} />;
 
   const send = async () => {
     const body = draft.trim();
@@ -85,6 +97,7 @@ export default function DirectConversationScreen() {
     setError('');
     try {
       addMessage(await sendConversationMessage(conversationId, user.id, body));
+      trackEvent('dm_sent','messages');
     } catch (nextError) {
       setDraft(body);
       setError(nextError instanceof Error ? nextError.message : 'Message failed to send.');

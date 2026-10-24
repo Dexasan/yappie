@@ -77,15 +77,16 @@ export default function AccountSettingsScreen() {
     <Screen>
       <View style={styles.topRow}>
         <Pressable accessibilityLabel="Go back" accessibilityRole="button" hitSlop={10} onPress={() => router.back()} style={styles.backButton}><Text style={styles.backGlyph}>‹</Text></Pressable>
-        <Text style={styles.topTitle}>Account settings</Text>
+        <Text style={styles.topTitle}>Settings</Text>
         <View style={styles.topSpacer} />
       </View>
 
-      <View style={styles.hero}>
-        <InkDrawing motif="key" size={96} color={colors.accent} />
-        <Text style={styles.heroTitle}>Your account, your call.</Text>
-        <Muted style={styles.heroCopy}>Keep your sign-in secure, or leave cleanly whenever you choose.</Muted>
-      </View>
+      <SectionHeader title="Notifications" />
+      <Pressable accessibilityRole="button" accessibilityLabel="Notification settings" onPress={() => router.push('/settings/notifications')} style={styles.notificationRow}>
+        <InkDrawing motif="bell" size={44} color={colors.accent} />
+        <View style={{ flex: 1 }}><Text style={styles.notificationTitle}>Notification settings</Text><Muted>Alerts, quiet hours & previews</Muted></View>
+        <Text style={styles.notificationArrow}>↗</Text>
+      </Pressable>
 
       <SectionHeader title="Account" />
       <Card style={styles.identityCard}>
@@ -184,12 +185,15 @@ export default function AccountSettingsScreen() {
           <Text style={styles.deleteLabel}>{deleting ? 'Deleting…' : 'Delete my account'}</Text>
         </Pressable>
       </Card>
-      <Text style={styles.buildLabel}>YAPPIE · {Constants.expoConfig?.version ?? '0.1.5'}{Platform.OS === 'android' ? ` · build ${Constants.expoConfig?.android?.versionCode ?? 10}` : ''}</Text>
+      <Text style={styles.buildLabel}>YAPPIE · {Constants.expoConfig?.version ?? '0.1.5'}{Platform.OS === 'android' ? ` · build ${Constants.expoConfig?.android?.versionCode ?? 10}` : Platform.OS === 'ios' ? ` · build ${Constants.expoConfig?.ios?.buildNumber ?? '10'}` : ''}</Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  notificationRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  notificationTitle: { fontFamily: fonts.editorial, fontSize: 27, color: colors.text, marginBottom: 4 },
+  notificationArrow: { fontSize: 25, color: colors.accent },
   buildLabel: { color: colors.textSubtle, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 24 },
   topRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
   backButton: { alignItems: 'center', backgroundColor: colors.surfaceRaised, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, height: 50, justifyContent: 'center', width: 50 },

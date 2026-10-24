@@ -214,7 +214,7 @@ export default function QuickChatConversationScreen() {
 
         {canSkip ? (
           <View style={styles.keepRow}>
-            <Text style={styles.keepCopy}>Keep this person?</Text>
+            <Text style={styles.keepCopy}>Keep this chat?</Text>
             <Pressable accessibilityRole="button" disabled={keeping || kept} onPress={() => void keepInTouch()} style={[styles.keepButton, kept && styles.keepButtonDone]}>
               <Text style={styles.keepButtonText}>{kept ? 'Saved ✓' : keeping ? 'Saving…' : 'Follow + save'}</Text>
             </Pressable>
@@ -228,7 +228,7 @@ export default function QuickChatConversationScreen() {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.id}
-          ListEmptyComponent={<Text style={styles.empty}>{topic ? `You both picked ${topic}. Say the first word.` : 'Say the first word.'}</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>{topic ? `You both picked ${topic}. Send a message.` : 'Send a message.'}</Text>}
           ref={listRef}
           renderItem={({ item }) => {
             const own = item.sender_id === user?.id;

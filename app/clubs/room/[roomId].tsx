@@ -22,6 +22,7 @@ import {
   type RoomParticipant,
 } from '@/features/clubs/api';
 import { closeRoomAudio, disconnectRoomAudio, revokeRoomAudioPublisher, useClubRoomAudio } from '@/features/clubs/audio';
+import { trackEvent } from '@/features/analytics/api';
 import { clubAvatarPublicUrl } from '@/features/clubs/avatar';
 import { colors, radius, spacing } from '@/theme/tokens';
 
@@ -87,6 +88,7 @@ export default function ClubRoomScreen() {
   const stage = participants.filter((participant) => participant.role === 'host' || participant.role === 'speaker');
   const audience = participants.filter((participant) => participant.role === 'listener');
   const audio = useClubRoomAudio(room?.status === 'live' && appIsActive ? roomId : undefined, ownParticipant?.role);
+  useEffect(()=>{if(audio.error)trackEvent('audio_failed','clubs');},[audio.error]);
   const giftRecipientName = giftRecipient?.display_name || (giftRecipient?.handle ? `@${giftRecipient.handle}` : 'Speaker');
 
   useEffect(() => {
@@ -245,7 +247,7 @@ export default function ClubRoomScreen() {
     <Screen>
       <View style={styles.topRow}>
         <Pressable accessibilityRole="button" onPress={confirmLeave} style={styles.leaveButton}>
-          <Text style={styles.leaveGlyph}>‹</Text><Text style={styles.leave}>{room?.status !== 'live' ? 'Back to club' : isHost ? 'End room' : 'Leave quietly'}</Text>
+          <Text style={styles.leaveGlyph}>‹</Text><Text style={styles.leave}>{room?.status !== 'live' ? 'Back to club' : isHost ? 'End room' : 'Leave room'}</Text>
         </Pressable>
         <Pill label={room?.status === 'live' ? `Live · ${participants.length}` : 'Ended'} tone={room?.status === 'live' ? 'live' : 'default'} />
       </View>

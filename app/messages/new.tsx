@@ -87,7 +87,7 @@ export default function NewMessageScreen() {
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {loading ? <ActivityIndicator color={colors.primary} style={styles.loading} /> : null}
       {!loading && profiles.length === 0 ? (
-        <EmptyState description={query.trim().replace(/^@/, '').length === 1 ? 'Type at least two characters to find someone.' : query ? 'Check their name or @handle. Only people who allow you to message them appear.' : 'People you follow or have chatted with appear here. Search for a name to start a new conversation.'} glyph="⌕" title={query ? 'Find your person' : 'Your next hello'} />
+        <EmptyState description={query.trim().replace(/^@/, '').length === 1 ? 'Type at least two characters to find someone.' : query ? 'Check their name or @handle. Only people who allow you to message them appear.' : 'People you follow or have chatted with appear here. Search for a name to start a new conversation.'} glyph="⌕" title={query ? 'No matching accounts' : 'No contacts yet'} />
       ) : null}
 
       <View style={styles.list}>

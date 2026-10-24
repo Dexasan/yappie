@@ -6,3 +6,6 @@ export function useSession() {
   return { profile, user: screen === 'auth' ? null : user, isLoading: false, isConfigured: true, onboardingComplete: screen !== 'onboarding', signOut: async () => location.assign('/?screen=auth'), refreshProfile: async () => {}, signIn: async () => {}, signUp: async () => ({ needsEmailConfirmation: true }), requestPasswordReset: async () => {}, completeOnboarding: async () => {}, updatePassword: async () => true };
 }
 export function useCalls() { const [isAvailable, setAvailable] = useState(false); return { isAvailable, setAvailable, isAvailabilityBusy: false }; }
+const activitySummary={activity_count:3,message_count:2,global_new:true,following_new:false,checked_at:new Date().toISOString()};
+const refreshActivity=async()=>{};
+export function useActivity() {return {summary:activitySummary,refresh:refreshActivity};}

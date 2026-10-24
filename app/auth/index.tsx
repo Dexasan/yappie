@@ -1,5 +1,5 @@
 import { Text, TextInput } from '@/components/Typography';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -8,6 +8,7 @@ import { ConversationArtwork } from '@/components/ConversationArtwork';
 import { Card, Pill, PrimaryButton, Screen } from '@/components/ui';
 import { useSession } from '@/context/SessionContext';
 import { colors, fonts, radius, spacing } from '@/theme/tokens';
+import { safeReturnTarget } from '@/lib/navigation-target';
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -20,6 +21,7 @@ function readableAuthError(error: unknown) {
 }
 
 export default function AuthScreen() {
+  const { returnTo } = useLocalSearchParams<{returnTo?: string}>();
   const { isConfigured, isLoading, onboardingComplete, requestPasswordReset, signIn, signUp, user } = useSession();
   const [mode, setMode] = useState<AuthMode>('sign-up');
   const [email, setEmail] = useState('');
@@ -29,7 +31,7 @@ export default function AuthScreen() {
   const [notice, setNotice] = useState('');
 
   if (!isLoading && user) {
-    return <Redirect href={onboardingComplete ? '/(tabs)/quick-chat' : '/onboarding'} />;
+    return <Redirect href={onboardingComplete ? safeReturnTarget(returnTo) ?? '/(tabs)/quick-chat' : '/onboarding'} />;
   }
 
   const strongSignUpPassword = password.length >= 10 && /[A-Za-z]/.test(password) && /\d/.test(password);
@@ -73,7 +75,7 @@ export default function AuthScreen() {
     setNotice('');
     try {
       await requestPasswordReset(email.trim().toLowerCase());
-      setNotice('Password reset link sent. Open it on this Android device to choose a new password.');
+      setNotice('Password reset link sent. Open it on this device to choose a new password.');
     } catch (nextError) {
       setError(readableAuthError(nextError));
     } finally {
@@ -91,7 +93,6 @@ export default function AuthScreen() {
         <ConversationArtwork compact />
         <Text style={styles.introEyebrow}>{mode === 'sign-up' ? 'GOOD COMPANY STARTS HERE' : 'WELCOME BACK'}</Text>
         <Text style={styles.introTitle}>{mode === 'sign-up' ? 'GOOD COMPANY.\nGREAT STORIES.' : 'BACK FOR\nANOTHER HELLO.'}</Text>
-        <Text style={styles.introCopy}>Meet over shared interests. Stay for the conversation.</Text>
       </View>
 
       <View style={styles.promiseRow}>

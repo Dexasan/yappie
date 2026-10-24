@@ -50,7 +50,7 @@ export default function WalletScreen() {
         <View style={styles.headerCopy}><Text style={styles.pageLabel}>{checkoutEnabled ? 'YAPPIE / EARNINGS' : 'YAPPIE / GIFT LAB'}</Text><Text style={styles.pageTitle}>{checkoutEnabled ? 'Gift wallet' : 'Gift preview'}</Text></View>
         <RetroGlyph glyph={checkoutEnabled ? '$' : '✦'} tone="warning" />
       </View>
-      <PixelRule label={checkoutEnabled ? 'real gifts · real appreciation' : 'free beta · no payments'} />
+      <PixelRule label={checkoutEnabled ? 'gift earnings' : 'free beta · no payments'} />
 
       {loading ? <ActivityIndicator color={colors.warning} style={styles.loading} /> : null}
       {!loading && error ? <><EmptyState description={error} glyph="◎" title="Wallet unavailable" /><Pressable accessibilityRole="button" onPress={() => void refresh()} style={styles.retryButton}><Text style={styles.retryLabel}>Try again</Text></Pressable></> : null}
@@ -83,20 +83,20 @@ export default function WalletScreen() {
             <View style={styles.betaHero}>
               <View style={styles.betaArt}><GiftArtwork animated size={92} slug="gift_vault" /></View>
               <Text style={styles.betaStamp}>FREE BETA / DISPLAY ONLY</Text>
-              <Text style={styles.betaTitle}>The gift vault is sleeping.</Text>
+              <Text style={styles.betaTitle}>Gifting is unavailable</Text>
               <Text style={styles.betaCopy}>Explore what we are designing. Nothing here can be bought, sent, earned, or withdrawn yet.</Text>
               <View style={styles.betaStatus}><Text style={styles.betaStatusDot}>●</Text><Text style={styles.betaStatusText}>PAYMENTS OFF · WALLET OFF · ZERO CHARGES</Text></View>
             </View>
           )}
 
-          <View style={styles.sectionHeader}><View><Text style={styles.sectionEyebrow}>{checkoutEnabled ? 'AVAILABLE NOW' : 'IN THE WORKSHOP'}</Text><Text style={styles.sectionTitle}>Gift shelf</Text></View><Text style={styles.sectionCount}>{catalog.length}</Text></View>
+          <View style={styles.sectionHeader}><View><Text style={styles.sectionEyebrow}>{checkoutEnabled ? 'AVAILABLE NOW' : 'GIFT PREVIEW'}</Text><Text style={styles.sectionTitle}>Gifts</Text></View><Text style={styles.sectionCount}>{catalog.length}</Text></View>
           <View style={styles.catalog}>
             {catalog.map((gift) => {
               const presentation = giftPresentation(gift.slug);
               return (
                 <View key={gift.slug} style={styles.catalogItem}><PaperSurface variant="ticket" color={colors.surfaceSoft} ink={presentation.accent} />
                   <GiftArtwork animated={gift.slug === 'bumper'} size={60} slug={gift.slug} />
-                  <View style={styles.giftCopy}><Text style={[styles.giftLabel, { color: presentation.accent }]}>{presentation.label}</Text><Text style={styles.giftName}>{gift.name}</Text><Text style={styles.giftMeta}>{checkoutEnabled ? 'They receive 50% of net' : presentation.tagline}</Text></View>
+                  <View style={styles.giftCopy}><Text style={[styles.giftLabel, { color: presentation.accent }]}>{presentation.label}</Text><Text style={styles.giftName}>{gift.name}</Text><Text style={styles.giftMeta}>{checkoutEnabled ? 'They receive 50% of net' : 'Preview only'}</Text></View>
                   <Text style={[styles.giftPrice, { color: presentation.accent }]}>{checkoutEnabled ? formatUsd(gift.price_usd_cents) : 'PREVIEW'}</Text>
                 </View>
               );

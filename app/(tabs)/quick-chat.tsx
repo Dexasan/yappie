@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { useSession } from '@/context/SessionContext';
 import { BrandLockup, BrandMark } from '@/components/Brand';
 import { Avatar, Screen } from '@/components/ui';
 import { useCalls } from '@/context/CallContext';
@@ -19,6 +18,8 @@ import {
 } from '@/features/quick-chat/api';
 import { matchInterestCatalog } from '@/features/quick-chat/interests';
 import { colors, fonts } from '@/theme/tokens';
+import { trackEvent } from '@/features/analytics/api';
+import { ActivityButton } from '@/components/ActivityButton';
 
 type MatchState = 'idle' | 'searching';
 
@@ -44,7 +45,6 @@ function readableMatchError(error: unknown) {
 }
 
 export default function QuickChatScreen() {
-  const { profile } = useSession();
   const { isAvailable, isAvailabilityBusy, setAvailable } = useCalls();
   const [matchState, setMatchState] = useState<MatchState>('idle');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -60,6 +60,7 @@ export default function QuickChatScreen() {
   const [callersLoading, setCallersLoading] = useState(true);
   const [callingUserId, setCallingUserId] = useState<string | null>(null);
   const searching = matchState === 'searching';
+  const searchStartedAt = useRef(0);
   const suggestionQuery = interestSearchKey(interestInput.trim());
   const suggestionPool = useMemo(() => Array.from(new Map(
     [...suggestedInterests.map((interest) => interest.label), ...matchInterestCatalog]
@@ -158,6 +159,7 @@ export default function QuickChatScreen() {
       if (!activeSearchRef.current || generation !== searchGenerationRef.current) return;
 
       if (result.match_status === 'matched' && result.session_id && result.conversation_id && result.matched_profile_id) {
+        trackEvent('match_found','matching',Date.now()-searchStartedAt.current);
         activeSearchRef.current = false;
         pollTimerRef.current = null;
         setMatchState('idle');
@@ -185,6 +187,8 @@ export default function QuickChatScreen() {
     if (!selectedInterests.length || activeSearchRef.current) return;
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     const generation = searchGenerationRef.current + 1;
+    searchStartedAt.current=Date.now();
+    trackEvent('match_started','matching');
     searchGenerationRef.current = generation;
     setError('');
     setMatchState('searching');
@@ -193,6 +197,7 @@ export default function QuickChatScreen() {
   };
 
   const cancelSearch = async () => {
+    trackEvent('match_cancelled','matching',Date.now()-searchStartedAt.current);
     searchGenerationRef.current += 1;
     activeSearchRef.current = false;
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -217,7 +222,7 @@ export default function QuickChatScreen() {
       return;
     }
     if (selectedInterests.length >= 5) {
-      setError('You can tune into up to 5 interests.');
+      setError('You can select up to 5 interests.');
       return;
     }
     setSelectedInterests((current) => [...current, nextInterest]);
@@ -236,7 +241,7 @@ export default function QuickChatScreen() {
       const selected = current.some((interest) => interestSearchKey(interest) === interestSearchKey(label));
       if (selected) return current.filter((interest) => interestSearchKey(interest) !== interestSearchKey(label));
       if (current.length >= 5) {
-        setError('You can tune into up to 5 interests.');
+        setError('You can select up to 5 interests.');
         return current;
       }
       return [...current, label];
@@ -270,27 +275,24 @@ export default function QuickChatScreen() {
     <Screen>
       <View style={styles.topBar}>
         <BrandLockup compact />
-        <Pressable accessibilityRole="button" accessibilityLabel="Your profile" onPress={() => router.push('/(tabs)/profile')}>
-          <Avatar label={profile?.displayName || 'You'} path={profile?.avatarPath} size={42} />
-        </Pressable>
+        <ActivityButton />
       </View>
 
       <View style={styles.hero}>
         <PaperSurface variant="note" color={colors.accentSoft} ink={colors.accentSolid} />
-        <Text style={styles.heroEyebrow}>A CHANCE ENCOUNTER, BY DESIGN.</Text>
-        <View style={styles.heroRow}><View style={{flex:1}}><Text style={styles.heroTitle}>STRANGERS.</Text><Text style={styles.heroAccent}>For now.</Text></View><View style={styles.heroMark}><BrandMark size={92} /></View></View>
-        <Text style={styles.heroCopy}>A shared obsession. An unexpected connection.</Text>
+        <View style={styles.heroRow}><View style={{flex:1}}><Text style={styles.heroTitle}>Match with strangers</Text></View><View style={styles.heroMark}><BrandMark size={92} /></View></View>
+        <Text style={styles.heroCopy}>One-to-one chats based on shared interests.</Text>
       </View>
 
       <View style={styles.matchCard}><PaperSurface variant="ticket" color={colors.surfaceSoft} ink={colors.borderStrong} />
         <View style={styles.matchHeader}>
-          <Text style={styles.cardTitle}>{searching ? 'Finding your people…' : 'Pick your obsessions.'}</Text>
+          <Text style={styles.cardTitle}>{searching ? 'Finding a match…' : 'Choose interests'}</Text>
           <View style={styles.matchingBadge}>
             <View style={[styles.matchingDot, !matchingCount && styles.matchingDotEmpty]} />
-            <Text style={styles.matchingText}>{matchingCount === null ? 'Quick match' : matchingCount === 0 ? 'Start the wave' : matchingCount + ' matching'}</Text>
+            <Text style={styles.matchingText}>{matchingCount === null ? 'Matching' : matchingCount + ' matching'}</Text>
           </View>
         </View>
-        <Text style={styles.cardCopy}>{searching ? 'Looking for someone who shares your interests.' : 'The things you could talk about for hours. Pick up to five.'}</Text>
+        <Text style={styles.cardCopy}>{searching ? 'Looking for someone who shares your interests.' : 'Select 1–5 interests.'}</Text>
 
         <View style={styles.quickPicks}>
           {quickPicks.map((label, index) => {
@@ -305,7 +307,7 @@ export default function QuickChatScreen() {
 
         <View style={styles.customInterest}>
           <Text style={styles.searchGlyph}>⌕</Text>
-          <TextInput accessibilityLabel="Search matching interests" autoCapitalize="none" autoCorrect={false} editable={!searching} maxLength={40} onChangeText={setInterestInput} onSubmitEditing={useTypedInterest} placeholder="Something else? Add it here…" placeholderTextColor={colors.textSubtle} returnKeyType="search" style={styles.interestInput} value={interestInput} />
+          <TextInput accessibilityLabel="Search matching interests" autoCapitalize="none" autoCorrect={false} editable={!searching} maxLength={40} onChangeText={setInterestInput} onSubmitEditing={useTypedInterest} placeholder="Search or add an interest" placeholderTextColor={colors.textSubtle} returnKeyType="search" style={styles.interestInput} value={interestInput} />
           {interestInput.trim() ? <Pressable accessibilityLabel="Add interest" accessibilityRole="button" disabled={!canAddTypedInterest} onPress={useTypedInterest} style={[styles.addInterestButton, !canAddTypedInterest && styles.disabled]}><Text style={styles.addInterestText}>+</Text></Pressable> : null}
         </View>
         {interestInput.trim() ? (
@@ -329,7 +331,7 @@ export default function QuickChatScreen() {
         {searching ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Cancel matching" onPress={() => void cancelSearch()} style={styles.cancelButton}><ActivityIndicator color={colors.accent} size="small" /><Text style={styles.cancelText}>Searching · Tap to cancel</Text></Pressable>
         ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Find an interest match" accessibilityState={{ disabled: !selectedInterests.length }} disabled={!selectedInterests.length} onPress={beginSearch} style={({ pressed }) => [styles.matchButton, !selectedInterests.length && styles.matchButtonDisabled, pressed && styles.pressed]}><Text style={[styles.matchButtonText, !selectedInterests.length && styles.matchButtonTextDisabled]}>FIND MY PEOPLE</Text><Text style={[styles.matchArrow, !selectedInterests.length && styles.matchButtonTextDisabled]}>↗</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Find a match" accessibilityState={{ disabled: !selectedInterests.length }} disabled={!selectedInterests.length} onPress={beginSearch} style={({ pressed }) => [styles.matchButton, !selectedInterests.length && styles.matchButtonDisabled, pressed && styles.pressed]}><Text style={[styles.matchButtonText, !selectedInterests.length && styles.matchButtonTextDisabled]}>FIND A MATCH</Text><Text style={[styles.matchArrow, !selectedInterests.length && styles.matchButtonTextDisabled]}>↗</Text></Pressable>
         )}
       </View>
 
@@ -337,7 +339,7 @@ export default function QuickChatScreen() {
 
       <View style={styles.callSection}><PaperSurface variant="note" color={colors.cobaltSoft} ink={colors.cobalt} />
         <View style={styles.callHeader}>
-          <View style={{ flex: 1 }}><View style={{flexDirection:"row",alignItems:"center",gap:8}}><InkDrawing motif="sound" size={34} color={colors.cobalt} /><Text style={styles.sectionTitle}>Go off script.</Text></View><Text style={styles.sectionMeta}>{isAvailable ? 'You’re available for a hello.' : 'Make yourself available for voice calls.'}</Text></View>
+          <View style={{ flex: 1 }}><View style={{flexDirection:"row",alignItems:"center",gap:8}}><InkDrawing motif="sound" size={34} color={colors.cobalt} /><Text style={styles.sectionTitle}>Voice calls</Text></View><Text style={styles.sectionMeta}>{isAvailable ? 'Available for incoming calls.' : 'Turn on to receive voice calls.'}</Text></View>
           <Pressable accessibilityLabel="Available for voice calls" accessibilityRole="switch" hitSlop={6} accessibilityState={{ checked: isAvailable, disabled: isAvailabilityBusy }} disabled={isAvailabilityBusy} onPress={() => void setAvailable(!isAvailable)} style={[styles.availabilityToggle, isAvailable && styles.availabilityToggleOn]}><View style={[styles.toggleKnob, isAvailable && styles.toggleKnobOn]} /></Pressable>
         </View>
         {callersLoading ? <ActivityIndicator color={colors.accent} style={styles.loading} /> : null}
@@ -346,25 +348,22 @@ export default function QuickChatScreen() {
             {availableCallers.map((caller) => {
               const name = caller.display_name || (caller.handle ? '@' + caller.handle : 'Yappie member');
               const isCalling = callingUserId === caller.user_id;
-              return <Pressable key={caller.user_id} accessibilityRole="button" accessibilityLabel={'Call ' + name} disabled={Boolean(callingUserId)} onPress={() => void callPerson(caller)} style={({ pressed }) => [styles.callerCard, pressed && styles.pressed]}><View><Avatar label={name} path={caller.avatar_path} size={56} /><View style={styles.callerDot} /></View><Text numberOfLines={1} style={styles.callerName}>{name}</Text><Text style={styles.callAction}>{isCalling ? 'Calling…' : 'Say hello ↗'}</Text></Pressable>;
+              return <Pressable key={caller.user_id} accessibilityRole="button" accessibilityLabel={'Call ' + name} disabled={Boolean(callingUserId)} onPress={() => void callPerson(caller)} style={({ pressed }) => [styles.callerCard, pressed && styles.pressed]}><View><Avatar label={name} path={caller.avatar_path} size={56} /><View style={styles.callerDot} /></View><Text numberOfLines={1} style={styles.callerName}>{name}</Text><Text style={styles.callAction}>{isCalling ? 'Calling…' : 'Call ↗'}</Text></Pressable>;
             })}
           </ScrollView>
         ) : null}
-        {!callersLoading && !availableCallers.length ? <View style={styles.emptyCalls}><InkDrawing motif="sound" size={54} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.emptyCallsTitle}>A little quiet right now</Text><Text style={styles.emptyCallsCopy}>Open calls will appear here when people are available.</Text></View></View> : null}
+        {!callersLoading && !availableCallers.length ? <View style={styles.emptyCalls}><InkDrawing motif="sound" size={54} color={colors.accent} /><View style={{ flex: 1 }}><Text style={styles.emptyCallsTitle}>No one available to call</Text><Text style={styles.emptyCallsCopy}>People available for voice calls will appear here.</Text></View></View> : null}
       </View>
-      <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/clubs')} style={({ pressed }) => [styles.clubsLink, pressed && styles.pressed]}><PaperSurface variant="ticket" color={colors.accentSoft} ink={colors.accentSolid} /><View style={{ flex: 1 }}><Text style={styles.clubsLinkTitle}>Find your little corner of the world.</Text><Text style={styles.clubsLinkCopy}>EXPLORE CLUBS</Text></View><InkDrawing motif="planet" size={66} color={colors.accent} /></Pressable>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  heroRow: {flexDirection:'row',alignItems:'center',gap:5,marginTop:10},
+  heroRow: {flexDirection:'row',alignItems:'center',gap:5},
   heroMark: { marginVertical: -4, transform: [{ rotate: '-9deg' }] },
   topBar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 6 },
   hero: { marginBottom: 10, marginTop: 6, paddingHorizontal: 23, paddingVertical: 16 },
-  heroEyebrow: { color: colors.accent, fontSize: 8, fontWeight: '700', letterSpacing: 1.2 },
   heroTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 32, letterSpacing: -0.8, lineHeight: 37 },
-  heroAccent: { color: colors.accent, fontFamily: fonts.italic, fontSize: 41, lineHeight: 47, transform:[{rotate:'-4deg'}] },
   heroCopy: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 6 },
   matchCard: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 20 },
   matchHeader: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between' },
@@ -421,8 +420,5 @@ const styles = StyleSheet.create({
   emptyCalls: { alignItems: 'center', flexDirection: 'row', gap: 12, marginTop: 6, paddingVertical: 8 },
   emptyCallsTitle: { color: colors.text, fontFamily: fonts.editorial, fontSize: 22 },
   emptyCallsCopy: { color: colors.textSubtle, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  clubsLink: { alignItems: 'center', flexDirection: 'row', gap: 12, marginTop: 10, padding: 20 },
-  clubsLinkTitle: { color: colors.white, fontFamily: fonts.italic, fontSize: 29, lineHeight: 32 },
-  clubsLinkCopy: { color: colors.white, fontSize: 9, fontWeight: '700', letterSpacing: 1.5, marginTop: 14 },
   error: { color: colors.danger, fontSize: 13, lineHeight: 20, marginTop: 14 },
 });

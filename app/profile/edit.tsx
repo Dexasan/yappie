@@ -144,8 +144,7 @@ export default function EditProfileScreen() {
 
       <View style={styles.intro}>
         <Eyebrow>Make it yours</Eyebrow>
-        <Heading compact>Show up like a real person.</Heading>
-        <Muted>A little context makes it much easier for someone to say hello.</Muted>
+        <Heading compact>Edit profile</Heading>
       </View>
 
       <View style={styles.avatarPreview}>
@@ -157,7 +156,7 @@ export default function EditProfileScreen() {
           <Text style={styles.previewName}>{displayName.trim() || 'Your name'}</Text>
           <Text style={styles.previewHandle}>@{normalizedHandle || 'username'}</Text>
           <Pressable disabled={avatarBusy} onPress={() => void changePhoto()}><Text style={styles.photoAction}>{avatarPath ? 'Change photo' : 'Choose photo'}</Text></Pressable>
-          {avatarPath ? <Pressable disabled={avatarBusy} onPress={confirmRemovePhoto}><Text style={styles.removePhoto}>Remove photo</Text></Pressable> : <Muted>One profile picture. No galleries.</Muted>}
+          {avatarPath ? <Pressable disabled={avatarBusy} onPress={confirmRemovePhoto}><Text style={styles.removePhoto}>Remove photo</Text></Pressable> : null}
         </View>
       </View>
 

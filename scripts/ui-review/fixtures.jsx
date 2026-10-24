@@ -40,8 +40,15 @@ export function fixture(name,...args) {
   if (name === 'giftCheckoutEnabled') return false;
   if (name === 'formatUsd') return '$' + (args[0]/100).toFixed(2);
   if (state === 'loading' && name.startsWith('load')) return new Promise(()=>{});
-  if (state === 'error' && name === 'loadFeed') return Promise.reject(new Error('Could not load the feed. Check your connection.'));
+  if (state === 'error' && ['loadFeed','loadDiscoverFeed'].includes(name)) return Promise.reject(new Error('Could not load the feed. Check your connection.'));
   const values = {
+    loadDiscoverFeed:posts.map((post,i)=>({...post,ranking_score:10-i})),loadPost:posts[0],
+    loadEngagementSummary:{activity_count:3,message_count:2,global_new:true,following_new:false,checked_at:now},
+    loadActivity:[{activity_id:'a',actor_id:'jules',actor_display_name:'Jules',kind:'post_reply',post_id:'1',post_body:posts[0].body,created_at:now,read_at:null},{activity_id:'b',actor_id:'mika',actor_display_name:'Mika',kind:'follow',created_at:now,read_at:null}],
+    listSavedPosts:posts.slice(0,2),isModerator:false,
+    loadNotificationPreferences:{messages:true,replies:true,likes_follows:false,club_reminders:true,previews:false,quiet_start:null,quiet_end:null,timezone:'Europe/Berlin'},
+    listClubSessions:[{session_id:'review-session',title:'Albums that changed your life',starts_at:new Date(Date.now()+86400000).toISOString(),weekly:true,host_id:'review-other',is_attending:false}],
+    listModerationReports:[{report_id:'review-report',target_kind:'post',category:'spam',status:'open',details:'Reported post from its content menu',content_preview:'Example reported content'}],
     loadFeed:posts,loadFollowingFeed:posts.slice(0,1),loadClubs:clubs,listDirectConversations:conversations,
     loadTrendingMatchInterests:(state === 'topics' ? ['Football','Photography','Gaming','AI','Basketball','Cooking'] : ['Music','Cinema','Art','Deep talks','Travel','Books']).map(label=>({label})),
     loadQuickChatMatchingCount:12,listAvailableCallers:[],joinQuickChat:{match_status:'queued'},
@@ -62,6 +69,6 @@ export function fixture(name,...args) {
   if (name === 'getOrCreateDirectConversation') return Promise.resolve('review-chat');
   if (name === 'createPost') posts = [{...posts[0],post_id:String(Date.now()),author_display_name:'Alex Morgan',author_handle:'alexafterhours',body:args[1],like_count:0,reply_count:0},...posts];
   if (name === 'joinClub' || name === 'leaveClub') clubs = clubs.map(c=>c.club_id===args[0]?{...c,is_member:name==='joinClub'}:c);
-  if (state === 'empty' && ['loadFeed','loadClubs','listDirectConversations'].includes(name)) return Promise.resolve([]);
+  if (state === 'empty' && ['loadFeed','loadDiscoverFeed','loadActivity','listSavedPosts','loadClubs','listDirectConversations'].includes(name)) return Promise.resolve([]);
   return Promise.resolve(values[name] ?? []);
 }
