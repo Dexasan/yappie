@@ -15,7 +15,6 @@ export function BrandLockup({ compact = false, inverted = false }: { compact?: b
       <BrandMark size={compact ? 42 : 64} />
       <View style={styles.wordmarkCopy}>
         <Text style={[styles.wordmark, compact && styles.wordmarkCompact, inverted && styles.inverted]}>YAPPIE<Text style={styles.wordmarkDot}>.</Text></Text>
-        {!compact ? <Text style={[styles.tagline, inverted && styles.invertedMuted]}>A little hello. A whole new world.</Text> : null}
       </View>
     </View>
   );
