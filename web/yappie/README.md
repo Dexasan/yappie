@@ -2,7 +2,7 @@
 
 The public site is hosted by the `yappie-public` Cloudflare Worker at
 [yappie.site](https://yappie.site). Source assets are copies of the approved
-Yappie artwork. The home page introduces the upcoming browser chat. Add the
+Yappie artwork. The home page is the entry point for browser chat. Add the
 Android install link to `public/index.html` when the app is publicly released.
 The privacy and support pages are for the Android beta; a formal privacy contact
 is still needed before a public store launch.
@@ -27,9 +27,10 @@ live templates. For rollout and rollback details, see
 
 ## Web chat beta
 
-Guest chat uses a dedicated Cloudflare Durable Object. Keep `WEB_CHAT_ENABLED`
-at `false` on production until the two-browser flow and moderation are verified.
-Enabling it replaces the homepage prelaunch copy with a **Start chat** button.
+Guest chat uses a dedicated Cloudflare Durable Object. Production has
+`WEB_CHAT_ENABLED` set to `true`. With the guest and moderator secrets configured,
+the homepage shows **Start chat**. Set the flag to `false` to close guest chat
+and return the homepage to prelaunch copy.
 
 - Set `WEB_CHAT_SECRET` and `WEB_CHAT_MODERATOR_TOKEN` as distinct Worker secrets
   with at least 32 random characters each. The first signs temporary guest cookies.
@@ -47,7 +48,7 @@ Enabling it replaces the homepage prelaunch copy with a **Start chat** button.
   containing a report `id` and an `action` of `review` or `ban`. `ban` marks the
   report reviewed and limits the reported network for seven days. Review reports
   in a private environment because the response can contain conversation excerpts.
-- Before opening a public beta window, set up Cloudflare bot challenges for
+- Before promoting the public beta, set up Cloudflare bot challenges for
   suspicious traffic and arrange operator coverage for reports. Use the queue
   join, wait bucket, abandonment, two-way chat, and voice counters to decide when
   to expand. Once the working homepage is live, submit `/sitemap.xml` in Google
