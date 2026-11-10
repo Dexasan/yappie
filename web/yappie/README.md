@@ -35,6 +35,8 @@ close guest chat and show the availability notice.
 The browser matching and conversation screens mirror the mobile Quick Chat
 screens. The bundled fonts come from the same Expo font packages, and the paper
 surfaces and topic glyphs reuse the mobile SVG paths.
+Run `node web/yappie/sync-chat-interests.cjs` from the repository root after
+updating the mobile topic catalog or artwork.
 
 - Set `WEB_CHAT_SECRET` and `WEB_CHAT_MODERATOR_TOKEN` as distinct Worker secrets
   with at least 32 random characters each. The first signs temporary guest cookies.

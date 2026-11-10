@@ -30,7 +30,7 @@
     <section id="match-panel" class="paper match-panel" aria-labelledby="match-title">
       <svg class="paper-surface" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#ticket" width="100" height="100"/></svg>
       <div class="match-heading"><h2 id="match-title">Choose an interest</h2><span>1:1 chat</span></div>
-      <form id="start" class="start-chat">
+      <div id="start" class="start-chat">
         <p class="match-hint">Pick one or leave it blank to match with anyone.</p>
         <div class="interest-grid" role="group" aria-label="Suggested interests">
           <button class="interest-pick" type="button" aria-pressed="false" data-interest="Music"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#music"/></svg>Music</button>
@@ -40,13 +40,21 @@
           <button class="interest-pick" type="button" aria-pressed="false" data-interest="Travel"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#plane"/></svg>Travel</button>
           <button class="interest-pick" type="button" aria-pressed="false" data-interest="Anime"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#venetian-mask"/></svg>Anime</button>
         </div>
-        <label class="custom-interest">
-          <svg aria-hidden="true"><use href="/assets/chat-ink.svg#search"/></svg>
-          <input id="interest" aria-label="Interest" maxlength="40" autocomplete="off" placeholder="Search or add an interest">
-        </label>
-        <label class="acknowledgement"><input id="agree" type="checkbox" required> <span>I’m 18 or older and agree to the <a href="/chat-rules" target="_blank" rel="noopener">chat rules</a>.</span></label>
-        <button class="match-button" type="submit">Find a match <svg aria-hidden="true"><use href="/assets/chat-ink.svg#arrow"/></svg></button>
-      </form>
+        <div id="interest-search">
+          <div class="custom-interest">
+            <svg aria-hidden="true"><use href="/assets/chat-ink.svg#search"/></svg>
+            <input id="interest" role="combobox" aria-label="Search matching interests" aria-autocomplete="list" aria-controls="interest-suggestions" aria-expanded="false" maxlength="40" autocomplete="off" autocapitalize="none" enterkeyhint="done" placeholder="Search or add an interest">
+            <button id="add-interest" class="add-interest" type="button" aria-label="Add interest" hidden>+</button>
+          </div>
+          <div id="interest-suggestions" class="interest-suggestions" role="listbox" aria-label="Matching interest suggestions" hidden></div>
+          <button id="selected-interest" class="selected-interest" type="button" hidden></button>
+          <p id="interest-feedback" class="interest-feedback" role="status"></p>
+        </div>
+        <form id="match-form">
+          <label class="acknowledgement"><input id="agree" type="checkbox" required> <span>I’m 18 or older and agree to the <a href="/chat-rules" target="_blank" rel="noopener">chat rules</a>.</span></label>
+          <button class="match-button" type="submit">Find a match <svg aria-hidden="true"><use href="/assets/chat-ink.svg#arrow"/></svg></button>
+        </form>
+      </div>
       <div id="matching-status"><p id="status" role="status" tabindex="-1"></p></div>
       <div id="waiting" class="wait-actions" hidden>
         <button id="anyone" class="button" type="button" hidden>Match with anyone</button>

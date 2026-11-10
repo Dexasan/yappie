@@ -63,6 +63,19 @@
 .custom-interest svg { width: 23px; height: 23px; flex: none; color: var(--muted); }
 .custom-interest input { flex: 1; min-width: 0; min-height: 48px; border: 0; background: transparent; color: var(--paper); }
 .custom-interest input::placeholder, .compose textarea::placeholder { color: var(--subtle); }
+.chat-page .add-interest { flex: none; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--red); font-size: 25px; }
+.interest-suggestions { max-height: min(228px, 40dvh); margin-top: 6px; overflow: auto; border: 1px solid var(--rule); border-radius: 14px; background: #171716; }
+.chat-page .suggestion-row { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 46px; padding: 7px 12px; border: 0; background: transparent; color: var(--paper); text-align: left; }
+.suggestion-row + .suggestion-row { border-top: 1px solid var(--rule); }
+.suggestion-row:is(:hover, [aria-selected='true']) { background: var(--surface-raised); }
+.suggestion-label { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.suggestion-action { flex: none; color: #c2aedf; font-size: 12px; font-weight: 700; }
+.topic-glyph { flex: none; width: 24px; height: 24px; color: var(--red); }
+.topic-stamp { display: grid; place-items: center; border: 1px solid currentColor; border-radius: 3px; font: 700 12px/1 var(--display); }
+.chat-page .selected-interest { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; min-height: 44px; margin-top: 10px; padding: 5px 10px; border: 0; border-radius: 4px; background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.selected-interest .topic-glyph { color: var(--ink); }
+.interest-feedback { margin: 5px 0 0; color: var(--subtle); font-size: 12px; }
+.interest-feedback:empty { margin: 0; }
 .acknowledgement { display: flex; align-items: center; gap: 8px; min-height: 44px; padding-block: 6px; color: var(--muted); font-size: 12px; }
 .acknowledgement input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--red); }
 .acknowledgement a { text-underline-offset: 3px; }

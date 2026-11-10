@@ -1,11 +1,12 @@
 import { createVoiceCall } from './chat-voice.js';
+import { createInterestPicker } from './chat-interest-picker.js';
 
 const byId = (id) => document.getElementById(id);
 const start = byId('start');
 const status = byId('status');
-const interest = byId('interest');
-const interestPicks = [...start.querySelectorAll('[data-interest]')];
-const startButton = start.querySelector('button[type="submit"]');
+const matchForm = byId('match-form');
+const startButton = matchForm.querySelector('button[type="submit"]');
+const interestPicker = createInterestPicker(start);
 const options = byId('options');
 const compose = byId('compose');
 const message = byId('message');
@@ -182,7 +183,7 @@ function receive(event) {
 async function join() {
   if (phase === 'waiting' || phase === 'active' || phase === 'leaving') return;
   const currentAttempt = ++attempt;
-  usedInterest = interest.value.trim();
+  usedInterest = interestPicker.value;
   room = undefined;
   showWait('Connecting…');
   if (send('join', { interest: usedInterest })) {
@@ -253,20 +254,7 @@ function cancelSearch() {
   }
 }
 
-function updateInterestPicks() {
-  const selection = interest.value.trim().toLowerCase();
-  for (const pick of interestPicks) pick.setAttribute('aria-pressed', String(pick.dataset.interest.toLowerCase() === selection));
-}
-
-for (const pick of interestPicks) {
-  pick.addEventListener('click', () => {
-    interest.value = pick.getAttribute('aria-pressed') === 'true' ? '' : pick.dataset.interest;
-    updateInterestPicks();
-  });
-}
-interest.addEventListener('input', updateInterestPicks);
-
-start.addEventListener('submit', (event) => { event.preventDefault(); join(); });
+matchForm.addEventListener('submit', (event) => { event.preventDefault(); join(); });
 byId('new-chat').addEventListener('click', join);
 byId('cancel').addEventListener('click', cancelSearch);
 byId('anyone').addEventListener('click', () => {
