@@ -369,11 +369,11 @@ export class GuestChatPool extends DurableObject {
     this.sql.exec('DELETE FROM bans WHERE expires <= ?', now);
     this.sql.exec('DELETE FROM reports WHERE created <= ?', now - reportRetention);
     this.sql.exec('DELETE FROM stats WHERE date < ?', new Date(now - reportRetention).toISOString().slice(0, 10));
-    const expires = this.row(`SELECT MIN(at) AS at FROM (
-      SELECT MIN(expires) AS at FROM rooms UNION ALL SELECT MIN(expires) FROM limits
-      UNION ALL SELECT MIN(expires) FROM blocks UNION ALL SELECT MIN(expires) FROM bans
-      UNION ALL SELECT MIN(created) + ? FROM reports UNION ALL SELECT unixepoch(MIN(date)) * 1000 + ? FROM stats
-    )`, reportRetention, reportRetention + day)?.at;
+    const expires = this.row(`WITH deadlines(at) AS (VALUES
+      ((SELECT MIN(expires) FROM rooms)), ((SELECT MIN(expires) FROM limits)),
+      ((SELECT MIN(expires) FROM blocks)), ((SELECT MIN(expires) FROM bans)),
+      ((SELECT MIN(created) + ? FROM reports)), ((SELECT unixepoch(MIN(date)) * 1000 + ? FROM stats))
+    ) SELECT MIN(at) AS at FROM deadlines`, reportRetention, reportRetention + day).at;
     if (this.ctx.getWebSockets().length) await this.ctx.storage.setAlarm(now + minute);
     else if (expires !== null) await this.ctx.storage.setAlarm(Math.max(now + 1000, expires));
   }
