@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- PaperSurface and InkDrawing geometry from src/components/InkArtwork.tsx. -->
+  <symbol id="note" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <path d="M4 3 34 5 64 2 98 5 96 39 99 71 96 98 59 96 29 99 2 95 4 62 1 33Z" fill="#36201B" stroke="#BF3826" stroke-width=".35"/>
+  </symbol>
+  <symbol id="ticket" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <path d="M3 4 97 2 98 29C93 30 93 42 98 43L97 97 3 99 2 44C7 42 7 31 2 30Z" fill="#22221F" stroke="#77746A" stroke-width=".35"/>
+  </symbol>
+  <symbol id="shield" viewBox="0 0 100 100">
+    <g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M50 10C38 23 27 23 17 24L21 56C24 71 35 81 50 90 68 80 78 65 80 52L83 24C66 22 61 19 50 10ZM50 20C40 29 31 31 27 32L31 55C33 65 40 74 50 79 63 69 69 61 70 49L73 32C64 31 56 27 50 20Z"/>
+      <path d="M38 48C32 37 46 33 50 43 58 29 72 43 59 55L50 63ZM9 13v10M4 18h10M87 73v12M81 79h12"/>
+    </g>
+  </symbol>
+  <symbol id="search" viewBox="0 0 100 100">
+    <g fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="43" cy="40" r="24"/><path d="m59 59 25 28 6-6-26-28M24 39c0-12 10-18 19-16"/>
+    </g>
+  </symbol>
+  <symbol id="arrow" viewBox="0 0 100 100">
+    <path d="M16 72C31 70 61 40 80 22M48 20l34-3-3 35" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="sound" viewBox="0 0 100 100">
+    <path d="M43 57V23C43 3 66 4 65 24L63 56C63 74 41 71 43 57ZM33 43l-1 12C28 84 76 90 77 55l1-11M52 82l-1 12M38 95h27M46 25l14 1M46 34h13M46 43h13M15 36C7 49 10 60 18 68M86 25C101 45 96 65 85 75" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <!-- The same topic artwork used by TopicArtwork. See SKETCHYICONS-NOTICE.txt. -->
+  <symbol id="music" viewBox="-2 -2 28 28">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.82 18.18Q9.53 11.5 9.08 4.86Q15.06 4.37 21.05 2.99Q20.07 9.5 21.2 15.93"/>
+      <path d="M5.51 14.73C6.8 15.33 8.6 16.89 9.4 18.03C8.66 20.05 8.37 21.18 6.53 20.85C4.06 20.5 3.04 19.05 3.36 17.62C3.4 15.69 3.82 14.82 5.5 14.64Q5.95 14.56 5.57 15.54"/>
+      <path d="M17.64 12.57C19.93 12.76 20.31 13.8 20.5 15.47C20.49 16.93 19.18 18.77 18.07 18.69C16.33 19.63 15.18 18.34 14.56 16.49C14.93 13.39 16.44 12.6 18.22 12.47Q18.43 13.13 17.73 13"/>
+    </g>
+  </symbol>
+  <symbol id="gamepad-2" viewBox="-2 -2 28 28">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5.91 10.85Q8 10.67 10.16 11.09"/>
+      <path d="M7.79 9.05Q7.63 11 8.15 12.86"/>
+      <path d="M15 12Q15.01 12 15.01 12"/>
+      <path d="M18 10Q18.01 10 18 10.01"/>
+      <path d="M17.92 5.29Q12 3.52 6.26 5.08C4.76 5.22 3.13 6.71 2.69 8.58C2.72 8.68 2.7 8.73 2.69 8.78C1.94 9.94 1.64 14.31 2.07 16.15C2.76 17.02 2.98 18.8 5.33 18.92C6 19.27 6.59 18.45 7.11 18.29Q7.66 17.24 8.51 16.87C8.49 16.08 9.62 16.11 10.11 16.26Q12 16.27 13.84 16.15C14.61 15.86 15.49 16.46 15.25 16.84Q16.39 17.2 17.22 18.41C17.19 18.43 18.39 19.56 18.98 19.51C20.3 18.7 21.52 17.57 21.91 16.51C21.78 14.61 21.23 9.4 21.31 8.74C21.34 8.67 21.34 8.63 21.28 8.61C21.56 6.66 18.98 4.87 17.35 4.89Q17.24 5.15 16.47 4.6"/>
+    </g>
+  </symbol>
+  <symbol id="clapperboard" viewBox="-2 -2 28 28">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.2 3.47Q13.92 5.35 15.45 7.58"/>
+      <path d="M20.54 6.28Q11.51 8.18 3.18 10.68Q2.2 9.93 1.87 8.63C1.45 6.99 2.53 6.47 3.27 6.3Q10.47 5.18 16.92 2.6C18.6 1.35 19.52 1.94 19.14 3.26Q20.1 4.61 20.56 4.85"/>
+      <path d="M3.6 11.04Q12 10.57 20.44 11.06Q21.3 15 21.53 18.42C20.91 19.81 20.47 20.5 19.48 21.07Q12 21.73 4.53 20.46C4.15 21.44 3.48 19.61 2.5 19.12Q3.35 15 3.05 9.93"/>
+      <path d="M6.18 5.22Q7.45 7.45 9.13 9.03"/>
+    </g>
+  </symbol>
+  <symbol id="messages-square" viewBox="-2 -2 28 28">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16.57 9.74C15.33 11.54 15.13 12.28 13.99 12.34Q10.41 11.46 7.02 12.08C6.02 12.03 5.65 12.29 5.69 12.96Q3.93 13.3 3.17 14.81C3.19 14.89 2.66 15.29 2.27 14.84C2.13 14.91 2 14.43 1.91 14.2Q1.77 9.14 2.28 3.41C1.76 2.18 2.36 2.01 3.9 1.6Q9 0.86 14.57 2.29C14.84 1.25 15.98 2.79 16 4.03Q15.57 7 16.01 9.36"/>
+      <path d="M19.64 8.46C21.06 9.21 21.96 10.41 21.74 11.34Q22.29 16.14 22.2 21.13C21.86 21.51 21.69 21.62 21.65 21.78C21.13 22.05 20.9 21.72 20.67 21.79Q19.67 20.7 18.8 19.45C18.59 18.77 17.82 18.99 17.01 19.33Q13.59 19.49 9.42 18.69C9 19.04 8.3 17.64 7.91 16.76Q8.15 16.5 7.86 15.97"/>
+    </g>
+  </symbol>
+  <symbol id="plane" viewBox="-2 -2 28 28">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17.73 19.31Q16.84 15.11 15.54 10.98Q17.87 9.37 19.47 7.85C21.65 6.59 21.36 3.84 21.24 2.82C19.64 2.63 17.69 2.87 16.9 4.04Q14.67 6.17 13.45 8.37Q9.04 6.46 4.6 6.16C4.13 5.85 3.74 6.07 3.67 6.73Q3.73 7.06 3.53 7.13C3.25 7.58 3.29 7.97 3.75 8.5Q6.24 10.42 8.85 11.73Q8.67 13.95 6.58 14.84Q5.5 14.82 4.24 14.75Q3.66 15.66 3.26 15.7Q4.14 17.54 5.7 17.63Q7.13 19.41 8.32 20.92Q8.42 20.42 8.9 20.03Q9.55 18.5 8.92 17.25Q10.86 16.54 12.13 14.7Q13.8 17.62 15.45 20.25C15.87 20.75 16.43 20.78 16.92 20.68Q17.03 20.45 17.28 20.43C17.4 19.85 17.96 19.82 17.78 19.5Q18.1 19.45 18.06 19.36"/>
+    </g>
+  </symbol>
+  <symbol id="venetian-mask" viewBox="-2 -2 28 28">
+    <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17.79 11.3C16.21 10.71 14.92 11.23 15.42 12.7"/>
+      <path d="M4.46 6.41C3.32 5.48 2.25 6.66 2.38 7.69Q1.87 10 2.11 11.74C2.67 14.33 4.23 16.23 7.57 16.57C9.3 17.03 10.59 17.61 11.9 18.73C13.71 17.54 15.38 16.77 17.17 16.8C19.73 16.52 22.54 15.11 22.31 12.34Q22.23 10 22.17 8.3C22.18 6.54 21.7 5.85 19.81 5.83Q18.5 6.07 16.73 5.88C14.94 6.35 13.69 7.19 11.97 8.01C10.24 6.65 9.06 6.35 7.27 6.1Q5.5 5.82 3.13 6"/>
+      <path d="M5.76 11.47C7.41 10.47 8.44 11.23 9.3 12.95"/>
+    </g>
+  </symbol>
+</svg>

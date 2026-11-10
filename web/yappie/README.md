@@ -29,8 +29,12 @@ live templates. For rollout and rollback details, see
 
 Guest chat uses a dedicated Cloudflare Durable Object. Production has
 `WEB_CHAT_ENABLED` set to `true`. With the guest and moderator secrets configured,
-the homepage shows **Start chat**. Set the flag to `false` to close guest chat
-and return the homepage to prelaunch copy.
+the homepage opens directly on the matching screen. Set the flag to `false` to
+close guest chat and show the availability notice.
+
+The browser matching and conversation screens mirror the mobile Quick Chat
+screens. The bundled fonts come from the same Expo font packages, and the paper
+surfaces and topic glyphs reuse the mobile SVG paths.
 
 - Set `WEB_CHAT_SECRET` and `WEB_CHAT_MODERATOR_TOKEN` as distinct Worker secrets
   with at least 32 random characters each. The first signs temporary guest cookies.

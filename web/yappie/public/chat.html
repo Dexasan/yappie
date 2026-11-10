@@ -4,39 +4,70 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
   <meta name="robots" content="noindex">
-  <title>Chat · Yappie</title>
+  <title>Chat With Strangers Online, No Sign-Up | Yappie</title>
+  <meta name="description" content="Chat with strangers on Yappie, an Omegle alternative for one-to-one browser chat. No sign-up or download required. For adults 18 and older.">
+  <link rel="canonical" href="https://yappie.site/">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chat.css">
   <script type="module" src="/chat.js"></script>
 </head>
-<body class="chat-page">
-  <header>
+<body class="chat-page" data-phase="start">
+  <header id="match-header" class="match-header">
     <div class="chat-shell">
-      <a class="brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="38" height="38">YAPPIE</a>
-      <a href="/chat-rules" target="_blank" rel="noopener">Chat rules</a>
+      <a class="chat-brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="42" height="42"> <span>YAPPIE<span class="brand-dot">.</span></span></a>
+      <a class="ink-button" href="/chat-rules" aria-label="Chat rules" title="Chat rules" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#shield"/></svg></a>
     </div>
   </header>
   <main class="chat-shell chat-main">
-    <h1 id="chat-title">Chat with strangers</h1>
-    <form id="start" class="start-chat">
-      <label for="interest">Interest <span class="note">(optional)</span></label>
-      <input id="interest" maxlength="40" autocomplete="off" placeholder="Music, games, anything">
-      <label class="acknowledgement"><input id="agree" type="checkbox" required> <span>I’m 18 or older and agree to the <a href="/chat-rules" target="_blank" rel="noopener">chat rules</a>.</span></label>
-      <button class="button" type="submit">Start chat</button>
-    </form>
-    <p id="status" role="status" tabindex="-1">One-to-one chat. No sign-up required.</p>
-    <div id="waiting" class="chat-actions" hidden>
-      <button id="anyone" class="button" type="button" hidden>Match with anyone</button>
-      <button id="cancel" class="button secondary" type="button">Cancel <kbd>Esc</kbd></button>
-    </div>
-    <section id="conversation" class="conversation" aria-label="Conversation" hidden>
-      <div class="chat-actions chat-tools">
-        <button id="leave" class="button secondary" type="button">Leave <kbd>Esc</kbd></button>
-        <button id="report" class="button secondary" type="button">Report</button>
-        <button id="block" class="button secondary" type="button">Block</button>
-        <button id="call" class="button secondary" type="button" hidden>Voice call</button>
-        <button id="new-chat" class="button" type="button" hidden>New chat</button>
+    <section id="match-hero" class="paper match-hero" aria-labelledby="chat-title">
+      <svg class="paper-surface" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#note" width="100" height="100"/></svg>
+      <div>
+        <h1 id="chat-title">Chat with strangers</h1>
+        <p>One-to-one chats. No sign-up required.</p>
       </div>
+      <img src="/assets/yappie-mark.png" alt="" width="92" height="92">
+    </section>
+    <section id="match-panel" class="paper match-panel" aria-labelledby="match-title">
+      <svg class="paper-surface" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#ticket" width="100" height="100"/></svg>
+      <div class="match-heading"><h2 id="match-title">Choose an interest</h2><span>1:1 chat</span></div>
+      <form id="start" class="start-chat">
+        <p class="match-hint">Pick one or leave it blank to match with anyone.</p>
+        <div class="interest-grid" role="group" aria-label="Suggested interests">
+          <button class="interest-pick" type="button" aria-pressed="false" data-interest="Music"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#music"/></svg>Music</button>
+          <button class="interest-pick" type="button" aria-pressed="false" data-interest="Gaming"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#gamepad-2"/></svg>Gaming</button>
+          <button class="interest-pick" type="button" aria-pressed="false" data-interest="Movies"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#clapperboard"/></svg>Movies</button>
+          <button class="interest-pick" type="button" aria-pressed="false" data-interest="Deep conversations"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#messages-square"/></svg>Deep conversations</button>
+          <button class="interest-pick" type="button" aria-pressed="false" data-interest="Travel"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#plane"/></svg>Travel</button>
+          <button class="interest-pick" type="button" aria-pressed="false" data-interest="Anime"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#venetian-mask"/></svg>Anime</button>
+        </div>
+        <label class="custom-interest">
+          <svg aria-hidden="true"><use href="/assets/chat-ink.svg#search"/></svg>
+          <input id="interest" aria-label="Interest" maxlength="40" autocomplete="off" placeholder="Search or add an interest">
+        </label>
+        <label class="acknowledgement"><input id="agree" type="checkbox" required> <span>I’m 18 or older and agree to the <a href="/chat-rules" target="_blank" rel="noopener">chat rules</a>.</span></label>
+        <button class="match-button" type="submit">Find a match <svg aria-hidden="true"><use href="/assets/chat-ink.svg#arrow"/></svg></button>
+      </form>
+      <div id="matching-status"><p id="status" role="status" tabindex="-1"></p></div>
+      <div id="waiting" class="wait-actions" hidden>
+        <button id="anyone" class="button" type="button" hidden>Match with anyone</button>
+        <button id="cancel" class="button secondary" type="button">Cancel <kbd>Esc</kbd></button>
+      </div>
+    </section>
+    <footer id="match-footer" class="match-footer"><nav aria-label="Yappie links"><a href="/privacy">Privacy</a><a href="/support">Support</a></nav></footer>
+    <section id="conversation" class="conversation" aria-label="Conversation" hidden>
+      <header class="conversation-header">
+        <button id="leave" class="icon-action back-action" aria-label="Leave chat" aria-keyshortcuts="Escape" title="Leave chat (Esc)" type="button"><span aria-hidden="true">‹</span></button>
+        <div class="stranger-avatar" aria-hidden="true"><img src="/assets/yappie-mark.png" alt="" width="34" height="34"></div>
+        <div class="conversation-identity"><b>Stranger</b><div id="conversation-status"></div></div>
+        <button id="call" class="icon-action call-action" aria-label="Voice call" title="Voice call" type="button" hidden><svg aria-hidden="true"><use href="/assets/chat-ink.svg#sound"/></svg></button>
+        <details id="options" class="conversation-options" hidden>
+          <summary class="icon-action" aria-label="Conversation options" title="Conversation options"><span aria-hidden="true">•••</span></summary>
+          <div class="options-panel">
+            <button id="report" type="button">Report</button>
+            <button id="block" type="button">Block</button>
+          </div>
+        </details>
+      </header>
       <div id="call-controls" class="chat-actions" hidden>
         <span id="call-status" role="status"></span>
         <button id="accept-call" class="button" type="button" hidden>Accept</button>
@@ -45,11 +76,15 @@
       </div>
       <audio id="remote-audio" autoplay playsinline></audio>
       <button id="play-audio" class="button secondary" type="button" hidden>Play call audio</button>
-      <ol id="transcript" class="transcript" role="log" aria-label="Chat messages" tabindex="0"></ol>
+      <div class="message-area">
+        <ol id="transcript" class="transcript" role="log" aria-label="Chat messages" tabindex="0"></ol>
+        <p class="empty-chat">Send a message to start the conversation.</p>
+      </div>
       <form id="compose" class="compose">
-        <textarea id="message" aria-label="Message" maxlength="1000" rows="2" placeholder="Type a message" required></textarea>
-        <button class="button" type="submit">Send</button>
+        <textarea id="message" aria-label="Message" maxlength="1000" rows="1" placeholder="Write a message…" required></textarea>
+        <button class="send-action" aria-label="Send" type="submit"><span aria-hidden="true">↑</span></button>
       </form>
+      <div class="rematch-row"><button id="new-chat" class="match-button" type="button" hidden>New chat <svg aria-hidden="true"><use href="/assets/chat-ink.svg#arrow"/></svg></button></div>
       <p id="message-error" class="note" role="status" hidden></p>
     </section>
     <dialog id="leave-dialog" aria-labelledby="leave-title">

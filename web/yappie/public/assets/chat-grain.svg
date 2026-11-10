@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="47" height="53" viewBox="0 0 47 53">
+  <!-- ArtCanvas grain from src/components/InkArtwork.tsx. -->
+  <circle cx="3" cy="7" r=".6" fill="#f1ebdd" opacity=".13"/>
+  <circle cx="29" cy="35" r=".45" fill="#f1ebdd" opacity=".1"/>
+  <path d="m15 43 1.4-1M37 14l1 2" stroke="#f1ebdd" stroke-width=".5" opacity=".09"/>
+</svg>

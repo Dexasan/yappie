@@ -7,46 +7,24 @@
   <meta name="description" content="Yappie is an upcoming Omegle alternative for adults. Match with strangers for one-to-one text chat and voice calls in your browser, with no sign-up.">
   <link rel="canonical" href="https://yappie.site/">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chat.css">
 </head>
-<body>
-  <header>
-    <div class="shell">
-      <a class="brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="54" height="54">YAPPIE</a>
-      <nav aria-label="Main"><a href="/privacy">Privacy</a><a href="/support">Support</a></nav>
+<body class="chat-page">
+  <header class="match-header">
+    <div class="chat-shell">
+      <a class="chat-brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="42" height="42"> <span>YAPPIE<span class="brand-dot">.</span></span></a>
     </div>
   </header>
-  <main class="shell">
-    <section class="hero">
+  <main class="chat-shell">
+    <section class="paper match-hero">
+      <svg class="paper-surface" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#note" width="100" height="100"/></svg>
       <div>
-        <p class="kicker" data-chat-status>Web chat coming soon · 18+</p>
         <h1>Chat with strangers</h1>
-        <p class="lead" data-chat-summary>Yappie is an upcoming Omegle alternative for one-to-one text chat and voice calls in your browser. No sign-up or download required.</p>
+        <p>Web chat is currently closed.</p>
       </div>
-      <img src="/assets/conversation-night-print.png" alt="Illustrated profiles in conversation">
+      <img src="/assets/yappie-mark.png" alt="" width="92" height="92">
     </section>
-    <section class="features" aria-label="How Yappie web chat works">
-      <article>
-        <span class="feature-index">01</span>
-        <h2>Match one-to-one</h2>
-        <p>Yappie pairs you with someone else who’s ready to chat.</p>
-      </article>
-      <article>
-        <span class="feature-index">02</span>
-        <h2>Text chat</h2>
-        <p>Exchange messages directly in your browser.</p>
-      </article>
-      <article data-voice-feature>
-        <span class="feature-index">03</span>
-        <h2>Voice calls</h2>
-        <p>Talk live using your microphone.</p>
-      </article>
-    </section>
+    <footer class="match-footer"><nav aria-label="Yappie links"><a href="/privacy">Privacy</a><a href="/support">Support</a></nav></footer>
   </main>
-  <footer>
-    <div class="shell">
-      <span>Yappie</span>
-      <nav aria-label="Footer"><a href="/privacy">Privacy</a><a href="/support">Support</a></nav>
-    </div>
-  </footer>
 </body>
 </html>

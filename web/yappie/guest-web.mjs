@@ -94,22 +94,19 @@ export async function serveWebPage(request, env, pathname) {
   const headers = new Headers(request.headers);
   headers.delete('If-None-Match');
   headers.delete('If-Modified-Since');
-  const asset = await env.ASSETS.fetch(new Request(request, { headers }));
+  const enabled = webChatEnabled(env);
+  const assetUrl = enabled ? new URL('/chat', request.url) : request.url;
+  const asset = await env.ASSETS.fetch(new Request(assetUrl, { method: request.method, headers }));
   if (!asset.ok) return asset;
   const response = new Response(asset.body, asset);
   response.headers.delete('ETag');
   response.headers.delete('Last-Modified');
   response.headers.set('Cache-Control', 'no-store');
-  if (!webChatEnabled(env)) return response;
+  if (!enabled) return response;
   const voice = voiceEnabled(env);
-  const description = `Yappie is an Omegle alternative for one-to-one text chat${voice ? ' and voice calls' : ''} in your browser. No sign-up or download required.`;
+  const description = `Chat with strangers on Yappie, an Omegle alternative for one-to-one text chat${voice ? ' and voice calls' : ''} in your browser. No sign-up or download required.`;
   return new HTMLRewriter()
+    .on('meta[name="robots"]', { element: (element) => element.remove() })
     .on('meta[name="description"]', { element: (element) => element.setAttribute('content', description) })
-    .on('[data-chat-status]', { element: (element) => element.setInnerContent('Browser chat · 18+') })
-    .on('[data-chat-summary]', { element: (element) => {
-      element.setInnerContent(description);
-      element.after('<a class="button" href="/chat">Start chat</a>', { html: true });
-    } })
-    .on('[data-voice-feature]', { element: (element) => { if (!voice) element.remove(); } })
     .transform(response);
 }

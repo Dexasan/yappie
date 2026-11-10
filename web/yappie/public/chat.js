@@ -4,6 +4,9 @@ const byId = (id) => document.getElementById(id);
 const start = byId('start');
 const status = byId('status');
 const interest = byId('interest');
+const interestPicks = [...start.querySelectorAll('[data-interest]')];
+const startButton = start.querySelector('button[type="submit"]');
+const options = byId('options');
 const compose = byId('compose');
 const message = byId('message');
 const sendButton = compose.querySelector('button');
@@ -46,14 +49,21 @@ function setPhase(next, text) {
   const active = next === 'active';
   const ended = next === 'ended';
   const waiting = next === 'waiting';
+  const inConversation = active || ended;
+  const hasSafetyActions = Boolean(room && inConversation && socket?.readyState === WebSocket.OPEN);
+  document.body.dataset.phase = next;
+  for (const id of ['match-header', 'match-hero', 'match-panel', 'match-footer']) show(id, !inConversation);
   show('start', next === 'start');
   show('waiting', waiting);
-  show('conversation', active || ended);
+  show('conversation', inConversation);
   show('leave', active);
   show('compose', active);
-  show('report', Boolean(room && (active || ended) && socket?.readyState === WebSocket.OPEN));
-  show('block', Boolean(room && (active || ended) && socket?.readyState === WebSocket.OPEN));
+  show('options', hasSafetyActions);
+  if (!hasSafetyActions) options.open = false;
   show('new-chat', ended);
+  byId('match-title').textContent = waiting ? 'Finding a match…' : 'Choose an interest';
+  const statusHost = byId(inConversation ? 'conversation-status' : 'matching-status');
+  if (status.parentElement !== statusHost) statusHost.append(status);
   voice.setAvailable(active && voiceAvailable);
   status.textContent = text;
 }
@@ -71,7 +81,8 @@ function resetMessages() {
 function addMessage(event) {
   const atBottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 48;
   const item = document.createElement('li');
-  const author = document.createElement('strong');
+  const author = document.createElement('span');
+  author.className = 'sr-only';
   author.textContent = event.own ? 'You: ' : 'Stranger: ';
   item.classList.toggle('own', event.own);
   item.append(author, document.createTextNode(event.text));
@@ -115,14 +126,14 @@ function receive(event) {
       room = packet.room;
       reporting = false;
       resetMessages();
-      setPhase('active', 'You’re chatting with a stranger.');
+      setPhase('active', 'Connected now');
       if (matchMedia('(pointer: fine)').matches) message.focus();
       else status.focus();
       break;
     case 'cancelled':
       room = undefined;
       setPhase('start', 'Search cancelled.');
-      start.querySelector('button').focus();
+      startButton.focus();
       break;
     case 'ended':
       if (room && packet.room === room && !reporting) {
@@ -238,9 +249,22 @@ function cancelSearch() {
     socket = undefined;
     connection?.close();
     setPhase('start', 'Search cancelled.');
-    start.querySelector('button').focus();
+    startButton.focus();
   }
 }
+
+function updateInterestPicks() {
+  const selection = interest.value.trim().toLowerCase();
+  for (const pick of interestPicks) pick.setAttribute('aria-pressed', String(pick.dataset.interest.toLowerCase() === selection));
+}
+
+for (const pick of interestPicks) {
+  pick.addEventListener('click', () => {
+    interest.value = pick.getAttribute('aria-pressed') === 'true' ? '' : pick.dataset.interest;
+    updateInterestPicks();
+  });
+}
+interest.addEventListener('input', updateInterestPicks);
 
 start.addEventListener('submit', (event) => { event.preventDefault(); join(); });
 byId('new-chat').addEventListener('click', join);
@@ -260,6 +284,7 @@ leaveDialog.addEventListener('close', () => {
 });
 
 byId('report').addEventListener('click', () => {
+  options.open = false;
   byId('report-form').reset();
   reportDialog.showModal();
 });
@@ -269,9 +294,15 @@ reportDialog.addEventListener('close', () => {
     status.textContent = reporting ? 'Sending report…' : 'Connection closed. The report could not be sent.';
   }
   reportDialog.returnValue = '';
+  if (!options.hidden) options.querySelector('summary').focus();
 });
 byId('block').addEventListener('click', () => {
+  options.open = false;
   if (room && !reporting) reporting = send('block', { room });
+});
+
+document.addEventListener('click', (event) => {
+  if (options.open && !options.contains(event.target)) options.open = false;
 });
 
 compose.addEventListener('submit', (event) => {
@@ -297,6 +328,14 @@ document.addEventListener('keydown', (event) => {
     if (!event.repeat) compose.requestSubmit();
   }
   if (event.key !== 'Escape' || reportDialog.open) return;
+  if (options.open) {
+    event.preventDefault();
+    if (!event.repeat) {
+      options.open = false;
+      options.querySelector('summary').focus();
+    }
+    return;
+  }
   if (!leaveDialog.open && phase !== 'active' && phase !== 'waiting') return;
   event.preventDefault();
   if (event.repeat) return;
