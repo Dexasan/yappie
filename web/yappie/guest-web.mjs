@@ -90,8 +90,17 @@ export async function handleWebChat(request, env) {
 
 export async function serveWebPage(request, env, pathname) {
   if (pathname === '/chat' && !webChatEnabled(env)) return Response.redirect(new URL('/', request.url), 302);
-  const response = await env.ASSETS.fetch(request);
-  if (pathname !== '/' || !webChatEnabled(env) || !response.ok) return response;
+  if (pathname !== '/') return env.ASSETS.fetch(request);
+  const headers = new Headers(request.headers);
+  headers.delete('If-None-Match');
+  headers.delete('If-Modified-Since');
+  const asset = await env.ASSETS.fetch(new Request(request, { headers }));
+  if (!asset.ok) return asset;
+  const response = new Response(asset.body, asset);
+  response.headers.delete('ETag');
+  response.headers.delete('Last-Modified');
+  response.headers.set('Cache-Control', 'no-store');
+  if (!webChatEnabled(env)) return response;
   const voice = voiceEnabled(env);
   const description = `Yappie is an Omegle alternative for one-to-one text chat${voice ? ' and voice calls' : ''} in your browser. No sign-up or download required.`;
   return new HTMLRewriter()
