@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
+  <meta name="robots" content="noindex">
+  <title>Chat · Yappie</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chat.css">
+  <script type="module" src="/chat.js"></script>
+</head>
+<body class="chat-page">
+  <header>
+    <div class="chat-shell">
+      <a class="brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="38" height="38">YAPPIE</a>
+      <a href="/chat-rules" target="_blank" rel="noopener">Chat rules</a>
+    </div>
+  </header>
+  <main class="chat-shell chat-main">
+    <h1 id="chat-title">Chat with strangers</h1>
+    <form id="start" class="start-chat">
+      <label for="interest">Interest <span class="note">(optional)</span></label>
+      <input id="interest" maxlength="40" autocomplete="off" placeholder="Music, games, anything">
+      <label class="acknowledgement"><input id="agree" type="checkbox" required> <span>I’m 18 or older and agree to the <a href="/chat-rules" target="_blank" rel="noopener">chat rules</a>.</span></label>
+      <button class="button" type="submit">Start chat</button>
+    </form>
+    <p id="status" role="status" tabindex="-1">One-to-one chat. No sign-up required.</p>
+    <div id="waiting" class="chat-actions" hidden>
+      <button id="anyone" class="button" type="button" hidden>Match with anyone</button>
+      <button id="cancel" class="button secondary" type="button">Cancel <kbd>Esc</kbd></button>
+    </div>
+    <section id="conversation" class="conversation" aria-label="Conversation" hidden>
+      <div class="chat-actions chat-tools">
+        <button id="leave" class="button secondary" type="button">Leave <kbd>Esc</kbd></button>
+        <button id="report" class="button secondary" type="button">Report</button>
+        <button id="block" class="button secondary" type="button">Block</button>
+        <button id="call" class="button secondary" type="button" hidden>Voice call</button>
+        <button id="new-chat" class="button" type="button" hidden>New chat</button>
+      </div>
+      <div id="call-controls" class="chat-actions" hidden>
+        <span id="call-status" role="status"></span>
+        <button id="accept-call" class="button" type="button" hidden>Accept</button>
+        <button id="mute" class="button secondary" type="button" hidden>Mute</button>
+        <button id="hang-up" class="button secondary" type="button">Hang up</button>
+      </div>
+      <audio id="remote-audio" autoplay playsinline></audio>
+      <button id="play-audio" class="button secondary" type="button" hidden>Play call audio</button>
+      <ol id="transcript" class="transcript" role="log" aria-label="Chat messages" tabindex="0"></ol>
+      <form id="compose" class="compose">
+        <textarea id="message" aria-label="Message" maxlength="1000" rows="2" placeholder="Type a message" required></textarea>
+        <button class="button" type="submit">Send</button>
+      </form>
+      <p id="message-error" class="note" role="status" hidden></p>
+    </section>
+    <dialog id="leave-dialog" aria-labelledby="leave-title">
+      <form method="dialog">
+        <h2 id="leave-title">Leave this chat?</h2>
+        <div class="chat-actions">
+          <button class="button" value="leave">Leave chat <kbd>Esc</kbd></button>
+          <button class="button secondary" value="stay" autofocus>Keep chatting</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="report-dialog" aria-labelledby="report-title">
+      <form id="report-form" method="dialog">
+        <h2 id="report-title">Report this chat</h2>
+        <p>Yappie will review your reason and recent messages.</p>
+        <label for="reason">Reason</label>
+        <select id="reason" required>
+          <option value="">Select a reason</option>
+          <option value="harassment">Harassment or hate</option>
+          <option value="sexual">Unwanted sexual content</option>
+          <option value="underage">Underage user</option>
+          <option value="spam">Spam or scam</option>
+          <option value="other">Other safety issue</option>
+        </select>
+        <div class="chat-actions">
+          <button class="button" value="report">Report and leave</button>
+          <button class="button secondary" value="cancel" formnovalidate>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+    <noscript><p>Enable JavaScript in your browser to start a chat.</p></noscript>
+  </main>
+</body>
+</html>

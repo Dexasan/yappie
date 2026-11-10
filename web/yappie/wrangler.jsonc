@@ -1,0 +1,14 @@
+{
+  "name": "yappie-public",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-04",
+  "account_id": "b7f76118b8864538680dbaefd014743b",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "routes": [{ "pattern": "yappie.site", "custom_domain": true }],
+  "vars": { "WEB_CHAT_ENABLED": "false" },
+  "durable_objects": { "bindings": [{ "name": "WEB_CHAT_POOL", "class_name": "GuestChatPool" }] },
+  "migrations": [{ "tag": "guest-chat-v1", "new_sqlite_classes": ["GuestChatPool"] }],
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/", "/chat", "/chat/", "/chat.html", "/chat-api/*", "/auth/*"] }
+}
