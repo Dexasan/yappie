@@ -31,33 +31,30 @@ live templates. For rollout and rollback details, see
 
 ## Web chat beta
 
-### Public visitor estimate
+### Public five-second visit counter
 
-The matching header has a top-right **Visitors · est.** disclosure. Its total
-starts at zero in the new `VisitorCounter` SQLite Durable Object and is never
-seeded with Cloudflare's IP-based analytics. The root (including its closed-chat
-fallback) and public help pages load `/visitor-counter.js`; auth routes and the
-embedded Android entry point are excluded. Matching does not depend on this code.
+The matching header shows **Visits**. Each page load counts once after five
+visible seconds, without needing a click, window focus, cookies, browser
+identification or a sign-up. Hidden-tab time pauses the timer. Refreshes,
+return visits and separate tabs can count again: this is a visit total, not a
+unique-human or online-user count. Script-capable bots can qualify too. No
+arbitrary number or historical Cloudflare total is added.
 
-A trusted pointer, keyboard or wheel event starts a signed first-party cookie
-and short-lived proof. Registration waits for eight visible, focused seconds.
-The Worker enforces same-origin JSON requests, proof age/signature, cookie
-binding and obvious-automation filters (including Cloudflare bot signals when
-available). A storage transaction deduplicates the random browser identifier
-and increments the persistent total once. Failed requests show unavailable,
-never an invented zero. The public API exposes only a total and start timestamp.
+The root (including its closed-chat fallback) and public help pages load
+`/visitor-counter.js`; auth routes and the embedded Android entry are excluded.
+Matching does not depend on counting. The client requests a signed page token
+and automatically commits after five visible seconds. The Worker checks the
+same-origin JSON request, signature and minimum five-second proof age. A
+storage transaction deduplicates that page token so concurrent network retries
+increment once. No per-browser or per-network lifetime limit is applied.
 
-This is an engaged-browser estimate, not human verification: client signals can
-be imitated, and no CAPTCHA is used. Cookies expire after a year; clearing them,
-switching devices or blocking scripts/cookies changes the result. DNT/GPC and
-`localStorage.setItem('yappie.visitor.exclude', '1')` exclude a browser from new
-registrations (use before interaction when doing operator/QA visits). Exclusion
-does not remove a previous count. No historical visitor numbers can be recovered.
-Daily counter-specific network HMACs limit starts to 60 and new browser counts to
-10 per network per UTC day; this can undercount shared networks. Raw IP addresses,
-user agents, account identifiers, referrers and chat content are not persisted by
-the counter. Expired anonymous rows are cleaned during subsequent registrations;
-if traffic stops, cleanup waits for the next successful registration.
+The counter creates no cookies and retains no IP addresses, user agents,
+account identifiers, referrers or chat content. Only short-lived random page
+tokens prevent duplicate requests; expired records are removed during later
+registrations. A blocked request or disabled JavaScript can miss a visit.
+Aggregate totals persist across deployments. Legacy cookie/network rows from
+the earlier engaged-browser counter no longer affect counting and retain their
+expiry cleanup. The old visitor cookie is ignored.
 
 The binding and additive migration are in `wrangler.jsonc`; the existing chat
 object and its migration are preserved. Signing uses the existing
@@ -67,24 +64,21 @@ free quota exhaustion fails requests instead of buying extra capacity. Keep the
 account on its Free plan for the owner's zero-euro budget. See Cloudflare's
 [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 
-Website validation and deployment were requested on 23 November 2026.
-`node scripts/verify-visitor-counter.cjs` passes registration timing, persistent
-deduplication, concurrent commits and replay, missing cookies, forged/expired
-proofs, changed networks, bot/cross-origin/DNT/GPC rejection, network caps,
-UTC midnight rollover and storage-failure handling. The local shared-pool
-regression suite and Wrangler deployment build also passed. Browser checks at
-320px and 390px confirmed header/disclosure fit, no horizontal overflow and
-keyboard access. Wrangler's local preview needs
-`--infer-origin-from-routes=false` to avoid the production HTTPS redirect when
-using a localhost HTTP origin.
+The owner requested simpler counting and deployment on 23 November 2026.
+`node scripts/verify-visitor-counter.cjs` passes five-second timing, cookie-free
+counting, return visits, persistence, concurrent/replayed commit idempotency,
+forged/expired proof rejection, malformed bodies, cross-origin rejection and
+storage failures. A browser-script test confirms automatic registration with
+no click/focus/cookie requirements, hidden-tab timer pausing and one commit per
+page. The previously verified 320/390px counter layout is preserved with the
+shorter label. Local Wrangler previews need `--infer-origin-from-routes=false`.
 
-Published Worker version: `94dec39a-f81d-488a-a3c2-8f67ec0820d0`.
-Live reads confirmed the matching form and counter render, the public API starts
-at zero and exposes only its total/start date/estimate flag, the privacy notice
-loads, unauthenticated app admission remains denied, and a deployment-check bot
-cannot register. Those checks did not add a production visitor. No historical
-Cloudflare totals were imported. Website source is published to the existing
-`fix/live-audio-lifecycle` GitHub branch; pending native app changes are excluded.
+Published Worker version: `32d3ca0d-1ab6-4979-af17-8d719b0fb55d`.
+The live page was opened without any input; its displayed total automatically
+increased to 1. That is a deployment-check visit, not independent user adoption.
+The public API reports its total, original start timestamp, `metric: visits`
+and `minimumSeconds: 5`. Source is published to the existing
+`fix/live-audio-lifecycle` GitHub branch; pending native changes are excluded.
 
 Guest chat uses a dedicated Cloudflare Durable Object. Production has
 `WEB_CHAT_ENABLED` set to `true`. With the guest and moderator secrets configured,
