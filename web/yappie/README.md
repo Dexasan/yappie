@@ -7,6 +7,10 @@ Android install link to `public/index.html` when the app is publicly released.
 The privacy and support pages are for the Android beta; a formal privacy contact
 is still needed before a public store launch.
 
+Search visibility setup, confirmed Google/Bing submissions, and the free
+IndexNow update command are recorded in
+[the search visibility record](../../docs/YAPPIE_SEARCH_VISIBILITY.md).
+
 From the repository root, with Wrangler authenticated to the Cloudflare account
 that owns the zone:
 
@@ -27,6 +31,61 @@ live templates. For rollout and rollback details, see
 
 ## Web chat beta
 
+### Public visitor estimate
+
+The matching header has a top-right **Visitors · est.** disclosure. Its total
+starts at zero in the new `VisitorCounter` SQLite Durable Object and is never
+seeded with Cloudflare's IP-based analytics. The root (including its closed-chat
+fallback) and public help pages load `/visitor-counter.js`; auth routes and the
+embedded Android entry point are excluded. Matching does not depend on this code.
+
+A trusted pointer, keyboard or wheel event starts a signed first-party cookie
+and short-lived proof. Registration waits for eight visible, focused seconds.
+The Worker enforces same-origin JSON requests, proof age/signature, cookie
+binding and obvious-automation filters (including Cloudflare bot signals when
+available). A storage transaction deduplicates the random browser identifier
+and increments the persistent total once. Failed requests show unavailable,
+never an invented zero. The public API exposes only a total and start timestamp.
+
+This is an engaged-browser estimate, not human verification: client signals can
+be imitated, and no CAPTCHA is used. Cookies expire after a year; clearing them,
+switching devices or blocking scripts/cookies changes the result. DNT/GPC and
+`localStorage.setItem('yappie.visitor.exclude', '1')` exclude a browser from new
+registrations (use before interaction when doing operator/QA visits). Exclusion
+does not remove a previous count. No historical visitor numbers can be recovered.
+Daily counter-specific network HMACs limit starts to 60 and new browser counts to
+10 per network per UTC day; this can undercount shared networks. Raw IP addresses,
+user agents, account identifiers, referrers and chat content are not persisted by
+the counter. Expired anonymous rows are cleaned during subsequent registrations;
+if traffic stops, cleanup waits for the next successful registration.
+
+The binding and additive migration are in `wrangler.jsonc`; the existing chat
+object and its migration are preserved. Signing uses the existing
+`WEB_CHAT_SECRET` with separate HMAC contexts. No new provider, paid plan or
+credentials are required. SQLite Durable Objects are available on Workers Free;
+free quota exhaustion fails requests instead of buying extra capacity. Keep the
+account on its Free plan for the owner's zero-euro budget. See Cloudflare's
+[Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
+
+Website validation and deployment were requested on 23 November 2026.
+`node scripts/verify-visitor-counter.cjs` passes registration timing, persistent
+deduplication, concurrent commits and replay, missing cookies, forged/expired
+proofs, changed networks, bot/cross-origin/DNT/GPC rejection, network caps,
+UTC midnight rollover and storage-failure handling. The local shared-pool
+regression suite and Wrangler deployment build also passed. Browser checks at
+320px and 390px confirmed header/disclosure fit, no horizontal overflow and
+keyboard access. Wrangler's local preview needs
+`--infer-origin-from-routes=false` to avoid the production HTTPS redirect when
+using a localhost HTTP origin.
+
+Published Worker version: `94dec39a-f81d-488a-a3c2-8f67ec0820d0`.
+Live reads confirmed the matching form and counter render, the public API starts
+at zero and exposes only its total/start date/estimate flag, the privacy notice
+loads, unauthenticated app admission remains denied, and a deployment-check bot
+cannot register. Those checks did not add a production visitor. No historical
+Cloudflare totals were imported. Website source is published to the existing
+`fix/live-audio-lifecycle` GitHub branch; pending native app changes are excluded.
+
 Guest chat uses a dedicated Cloudflare Durable Object. Production has
 `WEB_CHAT_ENABLED` set to `true`. With the guest and moderator secrets configured,
 the homepage opens directly on the matching screen. Set the flag to `false` to
@@ -43,8 +102,9 @@ updating the mobile topic catalog or artwork.
   Keep the moderator token available only to the operator reviewing reports.
 - For voice, set `WEB_CHAT_TURN_KEY` and `WEB_CHAT_TURN_TOKEN` from Cloudflare
   Realtime TURN. With both set, the service issues separate, short-lived relay
-  credentials to each guest after they agree to a call. The Android audio gateway
-  is independent.
+  credentials to each participant after they agree to a call. Shared Android
+  stranger chats use this same voice client. Other in-app calls use the Android
+  audio gateway.
 - During validation, enable chat in a staging deployment and use two browser
   profiles or devices. Check join, cancel, optional interests, sending and retry,
   Esc to leave, rematch, report and block, tab close, and mic teardown. Include
@@ -59,3 +119,50 @@ updating the mobile topic catalog or artwork.
   join, wait bucket, abandonment, two-way chat, and voice counters to decide when
   to expand. Once the working homepage is live, submit `/sitemap.xml` in Google
   Search Console. Add the Android link after the public app release.
+
+## Shared website and Android matching
+
+The Android interest picker opens `/chat-app` in an in-app WebView. That entry
+point verifies the account's Supabase session, completed age-verified profile,
+policy acknowledgements, languages, and block list. It then establishes a
+temporary HttpOnly cookie using a private, stable account identifier. Access
+tokens travel in request headers and are never added to the page or URL.
+Only two verified app accounts receive each other's profile reference, allowing
+the native **Follow + save** control to keep their connection. Browser guests
+receive no app profile reference.
+
+Both platforms use the existing `WEB_CHAT_POOL.getByName('web-v1')` Durable
+Object for matching, text delivery, voice signaling, and stranger-chat reports.
+Android passes its existing 1–5 selected interests. Browser visitors can select
+a chat language. Matching prefers shared interests and only falls back when
+neither person has an eligible shared-interest partner waiting.
+
+The app retains discovery personalization through
+`remember_quick_chat_interests`, which does not join the legacy SQL queue.
+Moderators can open **Me → Review reports → Stranger chat reports** to review
+reported excerpts from both platforms. The Worker verifies their moderator role
+on each request and records review/network-limit actions in the shared pool.
+
+Roll out the pending SQL migrations and updated Worker before distributing the
+new Android build. Existing installed APKs use the SQL matcher until updated.
+The new app uses the common pool exclusively. Native-to-native, native-to-browser,
+and browser-to-browser matching, microphone permission, voice teardown, account
+blocks, reporting, and disconnect/reconnect behavior require the combined
+validation pass and physical Android/browser checks before release.
+
+### Validation and rollout, 23 November 2026
+
+- Migrations 047–049 and the shared-pool Worker are deployed. Live checks with
+  disposable accounts passed authenticated app admission, browser/app and
+  app/app matching, bidirectional text, profile-reference privacy, and denial of
+  moderator access to ordinary accounts. Test accounts were removed afterward.
+- Session, SQL matching, shared-pool matching/block/report evidence, moderation,
+  audio lifecycle, and TypeScript checks pass. Moderation screens were visually
+  checked at 320px and 390px widths, and the live matching page at 320px.
+- Shared stranger-chat voice remains disabled at the owner's request. The
+  current Cloudflare account requires Realtime billing activation before a
+  dedicated TURN key can be created. Existing direct-call and Club audio use
+  their separate gateway. Do not advertise shared stranger voice as available.
+- Android build 16 includes the native WebView module. Installed older builds
+  must be updated to join the common pool. Physical Android WebView, device
+  microphone, and real network audio checks remain device validation work.

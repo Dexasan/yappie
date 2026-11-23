@@ -8,7 +8,26 @@
   "observability": { "enabled": false },
   "routes": [{ "pattern": "yappie.site", "custom_domain": true }],
   "vars": { "WEB_CHAT_ENABLED": "true" },
-  "durable_objects": { "bindings": [{ "name": "WEB_CHAT_POOL", "class_name": "GuestChatPool" }] },
-  "migrations": [{ "tag": "guest-chat-v1", "new_sqlite_classes": ["GuestChatPool"] }],
-  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/", "/chat", "/chat/", "/chat.html", "/chat-api/*", "/auth/*"] }
+  "durable_objects": { "bindings": [
+    { "name": "WEB_CHAT_POOL", "class_name": "GuestChatPool" },
+    { "name": "VISITOR_COUNTER", "class_name": "VisitorCounter" }
+  ] },
+  "migrations": [
+    { "tag": "guest-chat-v1", "new_sqlite_classes": ["GuestChatPool"] },
+    { "tag": "visitor-counter-v1", "new_sqlite_classes": ["VisitorCounter"] }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": [
+      "/", "/index.html", "/chat", "/chat/", "/chat.html",
+      "/chat-app", "/chat-api/*", "/auth/*",
+      "/visitor-api/*",
+      "/about", "/conversation-starters", "/chat-safety", "/chat-rules",
+      "/privacy", "/support", "/sitemap.xml", "/robots.txt",
+      "/about.html", "/conversation-starters.html", "/chat-safety.html", "/chat-rules.html",
+      "/privacy.html", "/support.html"
+    ]
+  }
 }

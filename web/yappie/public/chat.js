@@ -29,6 +29,25 @@ let reporting = false;
 let voiceAvailable = false;
 let usedInterest = '';
 const viewport = window.visualViewport;
+const embeddedApp = document.body.dataset.appSession === 'true';
+let appInterests = [];
+if (embeddedApp) {
+  try {
+    const requested = JSON.parse(new URLSearchParams(location.hash.slice(1)).get('interests') ?? '[]');
+    if (Array.isArray(requested) && requested.length >= 1 && requested.length <= 5 &&
+        requested.every(value => typeof value === 'string' && value.trim().length >= 2 && value.trim().length <= 40)) {
+      appInterests = requested;
+    }
+  } catch { /* Show the normal picker when the supplied selection is invalid. */ }
+  history.replaceState(null, '', location.pathname);
+}
+let usedInterests = [];
+function notifyApp(type, values = {}) {
+  if (embeddedApp) window.ReactNativeWebView?.postMessage(JSON.stringify({ type, ...values }));
+}
+function joinPacket() {
+  return { interests: usedInterests, interest: usedInterest, language: byId('chat-language')?.value ?? 'english' };
+}
 
 viewport?.addEventListener('resize', () => {
   if (viewport.scale === 1) document.body.style.setProperty('--chat-height', `${viewport.height}px`);
@@ -92,6 +111,7 @@ function addMessage(event) {
 }
 
 function ended(text) {
+  notifyApp('ended');
   if (leaveDialog.open) leaveDialog.close();
   voice.stop();
   clearTimeout(pending?.timeout);
@@ -119,7 +139,7 @@ function receive(event) {
   switch (packet.type) {
     case 'ready':
       voiceAvailable = packet.voice;
-      if (phase === 'waiting') send('join', { interest: usedInterest });
+      if (phase === 'waiting') send('join', joinPacket());
       break;
     case 'matched':
       if (phase !== 'waiting') break;
@@ -128,6 +148,7 @@ function receive(event) {
       reporting = false;
       resetMessages();
       setPhase('active', 'Connected now');
+      notifyApp('matched', { room, peerProfileId: packet.peerProfileId });
       if (matchMedia('(pointer: fine)').matches) message.focus();
       else status.focus();
       break;
@@ -135,6 +156,7 @@ function receive(event) {
       room = undefined;
       setPhase('start', 'Search cancelled.');
       startButton.focus();
+      notifyApp('cancelled');
       break;
     case 'ended':
       if (room && packet.room === room && !reporting) {
@@ -182,11 +204,14 @@ function receive(event) {
 
 async function join() {
   if (phase === 'waiting' || phase === 'active' || phase === 'leaving') return;
+  notifyApp('searching');
   const currentAttempt = ++attempt;
   usedInterest = interestPicker.value;
+  usedInterests = embeddedApp && appInterests.length ? appInterests : (usedInterest ? [usedInterest] : []);
+  usedInterest = usedInterests.join(' · ');
   room = undefined;
   showWait('Connecting…');
-  if (send('join', { interest: usedInterest })) {
+  if (send('join', joinPacket())) {
     showWait();
     return;
   }
@@ -251,6 +276,7 @@ function cancelSearch() {
     connection?.close();
     setPhase('start', 'Search cancelled.');
     startButton.focus();
+    notifyApp('cancelled');
   }
 }
 
@@ -260,6 +286,7 @@ byId('cancel').addEventListener('click', cancelSearch);
 byId('anyone').addEventListener('click', () => {
   if (send('broaden')) {
     usedInterest = '';
+    usedInterests = [];
     showWait();
   }
 });
@@ -332,4 +359,9 @@ document.addEventListener('keydown', (event) => {
   else cancelSearch();
 });
 
-window.addEventListener('pagehide', () => socket?.close());
+window.addEventListener('pagehide', () => { voice.stop(); socket?.close(); });
+if (embeddedApp && appInterests.length) {
+  // The native entry point verifies the existing age and policy acknowledgements.
+  byId('agree').checked = true;
+  join();
+}

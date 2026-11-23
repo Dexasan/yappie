@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /chat-api/
+Disallow: /auth/
 
 Sitemap: https://yappie.site/sitemap.xml

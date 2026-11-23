@@ -8,6 +8,10 @@ const reportWindow = 15 * minute;
 const reportRetention = 30 * day;
 const reasons = new Set(['harassment', 'sexual', 'underage', 'spam', 'other']);
 const isId = (value) => typeof value === 'string' && /^[a-f0-9-]{36}$/.test(value);
+const languages = new Set(['english', 'spanish', 'german', 'italian', 'french', 'portuguese', 'hindi', 'arabic', 'nepali', 'japanese']);
+const interestsOf = (guest) => guest.interests ?? (guest.interest ? [guest.interest] : []);
+const pairKey = (a, b) => [a, b].sort().join(':');
+const sharesInterest = (a, b) => interestsOf(a).some(interest => interestsOf(b).includes(interest));
 
 function push(socket, type, data = {}) {
   if (socket?.readyState !== WebSocket.OPEN) return;
@@ -37,6 +41,9 @@ export class GuestChatPool extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
+    this.sql.exec('CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, expires INTEGER, languages TEXT, blocked TEXT, profile_id TEXT)');
+    this.sql.exec('CREATE TABLE IF NOT EXISTS recent_pairs (a TEXT, b TEXT, expires INTEGER, PRIMARY KEY (a,b))');
+    this.sql.exec('CREATE TABLE IF NOT EXISTS moderation_actions (report TEXT, action TEXT, reviewer TEXT, created INTEGER, PRIMARY KEY (report,action))');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, a TEXT, b TEXT, network_a TEXT, network_b TEXT, expires INTEGER, a_spoke INTEGER DEFAULT 0, b_spoke INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS messages (seq INTEGER PRIMARY KEY, room TEXT NOT NULL, id TEXT NOT NULL, sender TEXT NOT NULL, text TEXT NOT NULL, UNIQUE (room, id));
@@ -70,6 +77,27 @@ export class GuestChatPool extends DurableObject {
     if (path === '/moderation') return this.moderation(request);
     const network = request.headers.get('X-Network');
     const now = Date.now();
+    if (path === '/count') {
+      const count = this.ctx.getWebSockets().filter(socket => {
+        const guest = socket.deserializeAttachment();
+        return socket.readyState === WebSocket.OPEN && guest?.queuedAt && !guest.room &&
+          guest.expires > now && now - guest.seen <= idleLimit;
+      }).length;
+      return json({ count });
+    }
+    if (path === '/account' && request.method === 'POST') {
+      const account = await request.json();
+      if (!isId(account.id) || !isId(account.profileId) || !Number.isFinite(account.expires) || account.expires <= now ||
+          account.expires > now + day || !Array.isArray(account.languages) ||
+          account.languages.length < 1 || account.languages.length > 8 ||
+          !account.languages.every(value => typeof value === 'string' && value.length >= 2 && value.length <= 32) ||
+          !Array.isArray(account.blocked) || account.blocked.length > 10000 || !account.blocked.every(isId)) {
+        return json({ message: 'Invalid account session.' }, 400);
+      }
+      this.sql.exec('INSERT OR REPLACE INTO accounts VALUES (?,?,?,?,?)',
+        account.id, account.expires, JSON.stringify(account.languages), JSON.stringify(account.blocked), account.profileId);
+      return json({ ready: true });
+    }
     if (path === '/admit') {
       if (this.banned(network) || !this.take(`session:${network}`, 12, 15 * minute, now)) {
         return json({ message: 'Guest access is temporarily limited. Try again later.' }, 429);
@@ -91,7 +119,9 @@ export class GuestChatPool extends DurableObject {
       return new Response(null, { status: 101, webSocket: client });
     }
     this.ctx.acceptWebSocket(server, [id]);
-    server.serializeAttachment({ id, expires, network, seen: now });
+    const account = this.row('SELECT languages FROM accounts WHERE id = ? AND expires > ?', id, now);
+    server.serializeAttachment({ id, expires, network, seen: now,
+      account: Boolean(account), languages: account ? JSON.parse(account.languages) : ['english'] });
     if (await this.ctx.storage.getAlarm() === null) await this.ctx.storage.setAlarm(now + minute);
     push(server, 'ready', { voice: voiceEnabled(this.env) });
     return new Response(null, { status: 101, webSocket: client });
@@ -107,11 +137,13 @@ export class GuestChatPool extends DurableObject {
     try { packet = await request.json(); } catch { return json({ message: 'Invalid request.' }, 400); }
     const { id, action } = packet ?? {};
     if (!isId(id) || !['review', 'ban'].includes(action)) return json({ message: 'Invalid report or action.' }, 400);
+    if (this.row('SELECT 1 FROM moderation_actions WHERE report=? AND action=?', id, action)) return json({ reviewed: true });
     const report = this.row('SELECT network FROM reports WHERE id = ? AND created > ?', id, Date.now() - reportRetention);
     if (!report) return json({ message: 'Report not found.' }, 404);
     this.ctx.storage.transactionSync(() => {
       if (action === 'ban') this.sql.exec('INSERT OR REPLACE INTO bans VALUES (?, ?)', report.network, Date.now() + 7 * day);
       this.sql.exec('UPDATE reports SET reviewed = 1 WHERE id = ?', id);
+      this.sql.exec('INSERT INTO moderation_actions VALUES (?,?,?,?)', id, action, request.headers.get('X-Reviewer') ?? 'operator', Date.now());
     });
     if (action === 'ban') {
       for (const socket of this.ctx.getWebSockets()) {
@@ -132,26 +164,42 @@ export class GuestChatPool extends DurableObject {
     }
     const wasQueued = Boolean(guest.queuedAt);
     guest.queuedAt ??= now;
-    guest.interest = preference;
+    guest.interests = preference;
+    guest.interest = preference[0] ?? '';
     socket.serializeAttachment(guest);
     if (!wasQueued) this.count('queue_joined');
-    const candidates = [];
+    const waiting = [];
     for (const other of this.ctx.getWebSockets()) {
       if (other === socket || other.readyState !== WebSocket.OPEN) continue;
       const peer = other.deserializeAttachment();
       if (!peer?.queuedAt || peer.room || peer.expires <= now || now - peer.seen > idleLimit) continue;
-      if (preference && peer.interest !== preference) continue;
-      if (peer.interest && preference !== peer.interest) continue;
-      candidates.push({ other, peer });
+      waiting.push({ other, peer });
     }
-    candidates.sort((left, right) => left.peer.queuedAt - right.peer.queuedAt);
-    const match = candidates.find(({ peer }) => !this.row(
-      'SELECT 1 FROM blocks WHERE a = ? AND b = ? AND expires > ?', ...[guest.id, peer.id].sort(), now,
-    ));
+    const excluded = new Set([
+      ...this.sql.exec('SELECT a,b FROM blocks WHERE expires IS NULL OR expires > ?', now).toArray(),
+      ...this.sql.exec('SELECT a,b FROM recent_pairs WHERE expires > ?', now).toArray(),
+    ].map(pair => pairKey(pair.a, pair.b)));
+    const accountBlocks = new Map();
+    for (const state of [guest, ...waiting.map(entry => entry.peer)]) {
+      if (!state.account) continue;
+      const row = this.row('SELECT blocked FROM accounts WHERE id = ? AND expires > ?', state.id, now);
+      accountBlocks.set(state.id, new Set(row ? JSON.parse(row.blocked) : []));
+    }
+    const eligible = (a, b) => (a.languages ?? ['english']).some(value => (b.languages ?? ['english']).includes(value)) &&
+      !excluded.has(pairKey(a.id, b.id)) && !accountBlocks.get(a.id)?.has(b.id) && !accountBlocks.get(b.id)?.has(a.id);
+    const candidates = waiting.filter(({ peer }) => eligible(guest, peer));
+    const overlap = (peer) => interestsOf(guest).filter(value => interestsOf(peer).includes(value)).length;
+    candidates.sort((left, right) => overlap(right.peer) - overlap(left.peer) || left.peer.queuedAt - right.peer.queuedAt);
+    const preferred = candidates.find(({ peer }) => sharesInterest(guest, peer));
+    const match = preferred ?? candidates.find(({ peer }) =>
+      !waiting.some(entry => entry.peer.id !== peer.id && eligible(peer, entry.peer) && sharesInterest(peer, entry.peer)));
     if (!match) return;
     const { other, peer } = match;
     const room = crypto.randomUUID();
     const expires = Math.min(guest.expires, peer.expires) + reportWindow;
+    if (guest.account || peer.account) {
+      this.sql.exec('INSERT OR REPLACE INTO recent_pairs VALUES (?,?,?)', ...[guest.id, peer.id].sort(), now + 5 * minute);
+    }
     this.sql.exec('INSERT INTO rooms (id, a, b, network_a, network_b, expires) VALUES (?, ?, ?, ?, ?, ?)', room, guest.id, peer.id, guest.network, peer.network, expires);
     for (const [member, state, partner] of [[socket, guest, peer], [other, peer, guest]]) {
       const seconds = Math.min(120, Math.ceil((now - state.queuedAt) / 5000) * 5);
@@ -160,7 +208,10 @@ export class GuestChatPool extends DurableObject {
       state.room = room;
       state.partner = partner.id;
       member.serializeAttachment(state);
-      push(member, 'matched', { room });
+      const profile = state.account && partner.account ?
+        this.row('SELECT profile_id FROM accounts WHERE id=? AND expires>?', partner.id, now) : null;
+      push(member, 'matched', { room, interests: interestsOf(guest).filter(value => interestsOf(peer).includes(value)),
+        ...(profile?.profile_id ? { peerProfileId: profile.profile_id } : {}) });
     }
     this.count('rooms_matched');
   }
@@ -329,12 +380,19 @@ export class GuestChatPool extends DurableObject {
     guest.seen = now;
     socket.serializeAttachment(guest);
     switch (packet.type) {
-      case 'ping': push(socket, 'pong'); return;
+      case 'ping':
+        if (guest.queuedAt && !guest.room) this.match(socket, guest, interestsOf(guest), now);
+        push(socket, 'pong');
+        return;
       case 'join': {
-        const preference = typeof packet.interest === 'string' ? packet.interest.trim().slice(0, 40).toLowerCase() : '';
+        const raw = Array.isArray(packet.interests) ? packet.interests : [packet.interest ?? ''];
+        if (raw.length > 5 || raw.some(value => typeof value !== 'string' || value.trim().length > 40 ||
+            value.trim().length === 1)) return error(socket, 'join', 'Choose up to five valid interests.');
+        const preference = [...new Set(raw.map(value => value.trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean))];
+        if (!guest.account && languages.has(packet.language)) guest.languages = [packet.language];
         return this.match(socket, guest, preference, now);
       }
-      case 'broaden': if (guest.queuedAt) return this.match(socket, guest, '', now); return;
+      case 'broaden': if (guest.queuedAt) return this.match(socket, guest, [], now); return;
       case 'cancel': this.end(socket, guest); push(socket, 'cancelled'); return;
       case 'leave': return this.end(socket, guest);
       case 'message': return this.message(socket, guest, packet);
@@ -366,12 +424,16 @@ export class GuestChatPool extends DurableObject {
     this.sql.exec('DELETE FROM rooms WHERE expires <= ?', now);
     this.sql.exec('DELETE FROM limits WHERE expires <= ?', now);
     this.sql.exec('DELETE FROM blocks WHERE expires <= ?', now);
+    this.sql.exec('DELETE FROM recent_pairs WHERE expires <= ?', now);
+    this.sql.exec('DELETE FROM accounts WHERE expires <= ?', now);
     this.sql.exec('DELETE FROM bans WHERE expires <= ?', now);
     this.sql.exec('DELETE FROM reports WHERE created <= ?', now - reportRetention);
+    this.sql.exec('DELETE FROM moderation_actions WHERE created <= ? OR NOT EXISTS (SELECT 1 FROM reports WHERE reports.id=moderation_actions.report)', now - reportRetention);
     this.sql.exec('DELETE FROM stats WHERE date < ?', new Date(now - reportRetention).toISOString().slice(0, 10));
     const expires = this.row(`WITH deadlines(at) AS (VALUES
       ((SELECT MIN(expires) FROM rooms)), ((SELECT MIN(expires) FROM limits)),
       ((SELECT MIN(expires) FROM blocks)), ((SELECT MIN(expires) FROM bans)),
+      ((SELECT MIN(expires) FROM recent_pairs)), ((SELECT MIN(expires) FROM accounts)),
       ((SELECT MIN(created) + ? FROM reports)), ((SELECT unixepoch(MIN(date)) * 1000 + ? FROM stats))
     ) SELECT MIN(at) AS at FROM deadlines`, reportRetention, reportRetention + day).at;
     if (this.ctx.getWebSockets().length) await this.ctx.storage.setAlarm(now + minute);

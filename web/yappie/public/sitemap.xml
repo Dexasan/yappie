@@ -2,5 +2,12 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://yappie.site/</loc>
+    <lastmod>2026-11-23</lastmod>
   </url>
+  <url><loc>https://yappie.site/conversation-starters</loc><lastmod>2026-11-23</lastmod></url>
+  <url><loc>https://yappie.site/chat-safety</loc><lastmod>2026-11-23</lastmod></url>
+  <url><loc>https://yappie.site/about</loc><lastmod>2026-11-23</lastmod></url>
+  <url><loc>https://yappie.site/chat-rules</loc><lastmod>2026-11-23</lastmod></url>
+  <url><loc>https://yappie.site/privacy</loc><lastmod>2026-11-23</lastmod></url>
+  <url><loc>https://yappie.site/support</loc><lastmod>2026-11-23</lastmod></url>
 </urlset>

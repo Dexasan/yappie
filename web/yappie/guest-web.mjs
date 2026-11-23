@@ -14,11 +14,11 @@ export function json(value, status = 200, headers = {}) {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', ...headers } });
 }
 
-async function signingKey(secret) {
+export async function signingKey(secret) {
   return crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
-async function sign(key, value) {
+export async function sign(key, value) {
   const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(value)));
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -58,6 +58,9 @@ export async function handleWebChat(request, env) {
   if (!webChatEnabled(env)) return json({ message: 'Web chat is coming soon.' }, 404);
   const url = new URL(request.url);
   const pool = env.WEB_CHAT_POOL.getByName('web-v1');
+  if (url.pathname === '/chat-api/pool-count' && request.method === 'GET') {
+    return pool.fetch('https://internal/count');
+  }
   if (url.pathname === '/chat-api/moderation') {
     const supplied = encoder.encode(request.headers.get('Authorization') ?? '');
     const expected = encoder.encode(`Bearer ${env.WEB_CHAT_MODERATOR_TOKEN}`);
@@ -103,10 +106,7 @@ export async function serveWebPage(request, env, pathname) {
   response.headers.delete('Last-Modified');
   response.headers.set('Cache-Control', 'no-store');
   if (!enabled) return response;
-  const voice = voiceEnabled(env);
-  const description = `Chat with strangers on Yappie, an Omegle alternative for one-to-one text chat${voice ? ' and voice calls' : ''} in your browser. No sign-up or download required.`;
   return new HTMLRewriter()
     .on('meta[name="robots"]', { element: (element) => element.remove() })
-    .on('meta[name="description"]', { element: (element) => element.setAttribute('content', description) })
     .transform(response);
 }

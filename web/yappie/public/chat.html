@@ -4,9 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
   <meta name="robots" content="noindex">
-  <title>Chat With Strangers Online, No Sign-Up | Yappie</title>
-  <meta name="description" content="Chat with strangers on Yappie, an Omegle alternative for one-to-one browser chat. No sign-up or download required. For adults 18 and older.">
+  <meta name="google-site-verification" content="-8ieYVKQsnPrV4h0ZvRDHraVwoziJAVPmmvb7tln8pE">
+  <meta name="msvalidate.01" content="1B3CE329F05CC199DF0800E55FD04C92">
+  <title>Chat with Strangers — Free Text Chat, No Sign-Up | Yappie</title>
+  <meta name="description" content="Chat with strangers for free on Yappie. Meet someone in one-to-one text chat, choose an interest and a language, and start without signing up. Adults 18+.">
   <link rel="canonical" href="https://yappie.site/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Yappie">
+  <meta property="og:title" content="Chat with Strangers — Free Text Chat | Yappie">
+  <meta property="og:description" content="One-to-one text chat for adults. Choose an interest and a language. Free, with no sign-up or download.">
+  <meta property="og:url" content="https://yappie.site/">
+  <meta property="og:image" content="https://yappie.site/assets/yappie-mark.png">
+  <meta property="og:image:alt" content="Yappie's vermilion and chalk talking-mouth logo">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" type="image/png" href="/assets/yappie-mark.png">
+  <link rel="preload" href="/assets/fonts/BarlowCondensed_700Bold.ttf" as="font" type="font/ttf" crossorigin>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://yappie.site/#organization","name":"Yappie","url":"https://yappie.site/","logo":"https://yappie.site/assets/yappie-mark.png"},{"@type":"WebSite","@id":"https://yappie.site/#website","name":"Yappie","url":"https://yappie.site/","inLanguage":"en","publisher":{"@id":"https://yappie.site/#organization"}},{"@type":"WebApplication","@id":"https://yappie.site/#app","name":"Yappie","url":"https://yappie.site/","description":"Free one-to-one text chat with strangers for adults 18 and older, with optional interests and a choice of chat language. No sign-up or download required.","applicationCategory":"SocialNetworkingApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript and a modern web browser","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"publisher":{"@id":"https://yappie.site/#organization"}}]}</script>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chat.css">
   <script type="module" src="/chat.js"></script>
@@ -15,7 +28,19 @@
   <header id="match-header" class="match-header">
     <div class="chat-shell">
       <a class="chat-brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="42" height="42"> <span>YAPPIE<span class="brand-dot">.</span></span></a>
-      <a class="ink-button" href="/chat-rules" aria-label="Chat rules" title="Chat rules" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#shield"/></svg></a>
+      <div class="match-header-actions">
+        <a class="ink-button" href="/chat-rules" aria-label="Chat rules" title="Chat rules" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#shield"/></svg></a>
+        <details class="visitor-counter" id="visitor-counter" aria-busy="true">
+          <summary aria-label="Estimated website visitors. How counting works"><span>Visitors <small>est.</small></span><strong id="visitor-count" aria-live="polite" aria-atomic="true">…</strong></summary>
+          <div class="visitor-counter-note">
+            <p id="visitor-count-status" role="status">Loading the visitor total…</p>
+            <p>One count per browser after an interaction and eight visible seconds. Repeat visits are deduplicated with a first-party cookie for up to a year.</p>
+            <p>Obvious bots are filtered. Cleared cookies, different devices, shared networks, privacy settings and sophisticated bots can affect the estimate.</p>
+            <p id="visitor-count-since">Starts at zero when enabled; earlier traffic is not included.</p>
+            <a href="/privacy#visitor-counter">Visitor privacy</a>
+          </div>
+        </details>
+      </div>
     </div>
   </header>
   <main class="chat-shell chat-main">
@@ -23,7 +48,7 @@
       <svg class="paper-surface" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#note" width="100" height="100"/></svg>
       <div>
         <h1 id="chat-title">Chat with strangers</h1>
-        <p>One-to-one chats. No sign-up required.</p>
+        <p>Free one-to-one text chat. No sign-up.</p>
       </div>
       <img src="/assets/yappie-mark.png" alt="" width="92" height="92">
     </section>
@@ -51,6 +76,15 @@
           <p id="interest-feedback" class="interest-feedback" role="status"></p>
         </div>
         <form id="match-form">
+          <label class="chat-language">Chat language
+            <select id="chat-language" aria-label="Chat language">
+              <option value="english">English</option><option value="spanish">Spanish</option>
+              <option value="german">German</option><option value="italian">Italian</option>
+              <option value="french">French</option><option value="portuguese">Portuguese</option>
+              <option value="hindi">Hindi</option><option value="arabic">Arabic</option>
+              <option value="nepali">Nepali</option><option value="japanese">Japanese</option>
+            </select>
+          </label>
           <label class="acknowledgement"><input id="agree" type="checkbox" required> <span>I’m 18 or older and agree to the <a href="/chat-rules" target="_blank" rel="noopener">chat rules</a>.</span></label>
           <button class="match-button" type="submit">Find a match <svg aria-hidden="true"><use href="/assets/chat-ink.svg#arrow"/></svg></button>
         </form>
@@ -61,7 +95,29 @@
         <button id="cancel" class="button secondary" type="button">Cancel <kbd>Esc</kbd></button>
       </div>
     </section>
-    <footer id="match-footer" class="match-footer"><nav aria-label="Yappie links"><a href="/privacy">Privacy</a><a href="/support">Support</a></nav></footer>
+    <section class="chat-info" aria-labelledby="how-chat-works">
+      <h2 id="how-chat-works">How to chat with strangers on Yappie</h2>
+      <p>Yappie connects adults for free, one-to-one text conversations in a browser. You do not need an account, a download, a camera, or a microphone to start.</p>
+      <ol>
+        <li><strong>Choose a language and an optional interest.</strong> Pick a topic such as music, gaming, movies, or travel, or leave the interest blank.</li>
+        <li><strong>Confirm you are 18 or older and accept the chat rules.</strong> Select Find a match to join the queue.</li>
+        <li><strong>Wait for another person, then say hello.</strong> Matching depends on who is online. Leave whenever you want and choose New chat to try another conversation.</li>
+      </ol>
+      <p>Yappie prefers a shared interest when an eligible partner is available. An interest is a preference, not a guarantee. The service is in beta, and you may need to wait when few people are online.</p>
+      <h2>Questions about random text chat</h2>
+      <details><summary>Is Yappie free, and do I need to sign up?</summary><p>Browser text chat is free. You can start as a guest without creating an account, entering an email address, or downloading an app.</p></details>
+      <details><summary>Is this anonymous chat?</summary><p>You appear as Stranger in browser chats. You do not need to give your name, email, or phone number. This does not make you untraceable: Yappie uses a temporary session cookie and protected network identifiers for matching and abuse prevention. Reported messages may be reviewed by moderators. Read the <a href="/privacy">privacy notice</a> before chatting.</p></details>
+      <details><summary>Can I choose who I talk to?</summary><p>You can choose a chat language and an optional interest. Yappie matches you with an eligible person in the shared website and Android chat pool. It does not offer a directory of people or a guaranteed match by country, age, or gender.</p></details>
+      <details><summary>Why am I waiting for a match?</summary><p>Someone else needs to be online and available at the same time. A language choice, interest, or block can affect who is eligible. You can cancel, try without an interest, or come back later. Yappie does not fill conversations with simulated users.</p></details>
+      <details><summary>Is Yappie a text-only Omegle alternative?</summary><p>Yappie offers one-to-one random text chat with optional interests and no browser sign-up. The public stranger chat currently has no video or voice calls. If you want a conversation without a camera, you can use text chat here.</p></details>
+      <details><summary>Who can use Yappie?</summary><p>Stranger chat is for adults aged 18 and older. Harassment, threats, hate, unwanted sexual content, spam, and scams are prohibited. No service can guarantee how a stranger will behave. You can leave, block, or report a conversation.</p></details>
+      <details><summary>How do I report or block someone?</summary><p>During a connected chat, open Conversation options and choose Report or Block. Reporting sends your reason and recent messages for review and leaves the chat. Blocking prevents another match with that session for 24 hours. See the <a href="/chat-rules">chat rules</a> for retention details.</p></details>
+      <nav class="guide-links" aria-label="Chat guides">
+        <a href="/conversation-starters"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#messages-square"/></svg><span>Conversation starters<small>Questions for a first chat</small></span></a>
+        <a href="/chat-safety"><svg aria-hidden="true"><use href="/assets/chat-ink.svg#shield"/></svg><span>Chat safety<small>Privacy, blocking, and reports</small></span></a>
+      </nav>
+    </section>
+    <footer id="match-footer" class="match-footer"><nav aria-label="Yappie links"><a href="/about">About</a><a href="/chat-rules">Chat rules</a><a href="/privacy">Privacy</a><a href="/support">Support</a></nav></footer>
     <section id="conversation" class="conversation" aria-label="Conversation" hidden>
       <header class="conversation-header">
         <button id="leave" class="icon-action back-action" aria-label="Leave chat" aria-keyshortcuts="Escape" title="Leave chat (Esc)" type="button"><span aria-hidden="true">‹</span></button>

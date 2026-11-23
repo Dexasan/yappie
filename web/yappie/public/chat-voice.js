@@ -10,6 +10,24 @@ export function createVoiceCall(send) {
   const supported = Boolean(window.RTCPeerConnection && navigator.mediaDevices?.getUserMedia);
   let available = false;
   let current;
+  async function microphonePermission() {
+    if (!window.ReactNativeWebView || document.body.dataset.appSession !== 'true') return;
+    const requestId = crypto.randomUUID();
+    await new Promise((resolve, reject) => {
+      const finish = (granted) => {
+        clearTimeout(timer);
+        window.removeEventListener('yappie-microphone-result', receivePermission);
+        if (granted) resolve();
+        else reject(new DOMException('Microphone permission denied', 'NotAllowedError'));
+      };
+      const receivePermission = (event) => {
+        if (event.detail?.requestId === requestId) finish(event.detail.granted === true);
+      };
+      const timer = setTimeout(() => finish(false), 30000);
+      window.addEventListener('yappie-microphone-result', receivePermission);
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'microphone', requestId }));
+    });
+  }
 
   function render(text = '', phase) {
     controls.hidden = !text;
@@ -53,6 +71,8 @@ export function createVoiceCall(send) {
     render('Connecting voice…', 'connecting');
     deadline(call, 'Couldn’t connect the voice call.', 30000);
     try {
+      await microphonePermission();
+      if (current !== call) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (current !== call) {
         stream.getTracks().forEach((track) => track.stop());

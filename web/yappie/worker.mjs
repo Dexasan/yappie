@@ -1,5 +1,8 @@
 import { handleWebChat, serveWebPage } from './guest-web.mjs';
+import { handleAppReports, serveAppChat } from './app-chat.mjs';
+import { handleVisitorCounter, withVisitorCounter } from './visitor-counter.mjs';
 export { GuestChatPool } from './guest-chat-pool.mjs';
+export { VisitorCounter } from './visitor-counter.mjs';
 
 const upstream = 'https://fzpehebwhsfrrgdugxpr.supabase.co';
 const appCallback = 'socialdiscovery://auth/callback';
@@ -42,14 +45,23 @@ async function readSmallBody(request) {
 }
 
 export async function handle(request, env, verify = fetch) {
-  const { pathname } = new URL(request.url);
+  const url = new URL(request.url);
+  if (url.hostname === 'yappie.site' && url.protocol === 'http:') {
+    url.protocol = 'https:';
+    return Response.redirect(url, 308);
+  }
+  const { pathname } = url;
   const action = Object.hasOwn(actions, pathname) ? actions[pathname] : null;
   if (!action) {
+    if (pathname.startsWith('/visitor-api/')) return handleVisitorCounter(request, env);
+    if (pathname === '/chat-app') return serveAppChat(request, env);
+    if (pathname === '/chat-api/app/reports') return handleAppReports(request, env);
     if (pathname.startsWith('/auth/')) return invalid(404);
     if (pathname.startsWith('/chat-api/')) return handleWebChat(request, env);
-    if (pathname === '/chat.html' || pathname === '/chat/') return Response.redirect(new URL('/chat', request.url), 308);
-    if (pathname === '/' || pathname === '/chat') return serveWebPage(request, env, pathname);
-    return env.ASSETS.fetch(request);
+    // The root is the single public matching URL; ASSETS still serves /chat internally.
+    if (pathname === '/chat' || pathname === '/chat.html' || pathname === '/chat/' || pathname === '/index.html') return Response.redirect(new URL('/', request.url), 308);
+    if (pathname === '/' || pathname === '/chat') return withVisitorCounter(request, await serveWebPage(request, env, pathname));
+    return withVisitorCounter(request, await env.ASSETS.fetch(request));
   }
   if (request.method === 'GET' || request.method === 'HEAD') {
     return page(action.title, `<p>Continue on the same device where you requested this email.</p>
