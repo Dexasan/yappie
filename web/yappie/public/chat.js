@@ -342,7 +342,7 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     if (!event.repeat) compose.requestSubmit();
   }
-  if (event.key !== 'Escape' || reportDialog.open) return;
+  if (event.key !== 'Escape' || reportDialog.open || document.querySelector('.wall-dialog[open]')) return;
   if (options.open) {
     event.preventDefault();
     if (!event.repeat) {

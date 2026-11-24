@@ -10,11 +10,13 @@
   "vars": { "WEB_CHAT_ENABLED": "true" },
   "durable_objects": { "bindings": [
     { "name": "WEB_CHAT_POOL", "class_name": "GuestChatPool" },
-    { "name": "VISITOR_COUNTER", "class_name": "VisitorCounter" }
+    { "name": "VISITOR_COUNTER", "class_name": "VisitorCounter" },
+    { "name": "STICKY_WALL", "class_name": "StickyWall" }
   ] },
   "migrations": [
     { "tag": "guest-chat-v1", "new_sqlite_classes": ["GuestChatPool"] },
-    { "tag": "visitor-counter-v1", "new_sqlite_classes": ["VisitorCounter"] }
+    { "tag": "visitor-counter-v1", "new_sqlite_classes": ["VisitorCounter"] },
+    { "tag": "sticky-wall-v1", "new_sqlite_classes": ["StickyWall"] }
   ],
   "assets": {
     "directory": "./public",
@@ -23,7 +25,7 @@
     "run_worker_first": [
       "/", "/index.html", "/chat", "/chat/", "/chat.html",
       "/chat-app", "/chat-api/*", "/auth/*",
-      "/visitor-api/*",
+      "/visitor-api/*", "/wall-api/*",
       "/about", "/conversation-starters", "/chat-safety", "/chat-rules",
       "/privacy", "/support", "/sitemap.xml", "/robots.txt",
       "/about.html", "/conversation-starters.html", "/chat-safety.html", "/chat-rules.html",

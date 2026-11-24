@@ -31,6 +31,68 @@ live templates. For rollout and rollback details, see
 
 ## Web chat beta
 
+### Community sticky-note wall
+
+The matching page has a shared wall with 20 note slots, split between the black
+desktop margins. Below 1000px it becomes an expandable wall beneath matching.
+It is hidden during conversations and excluded from the embedded Android page.
+Paper colours reuse the chalk, coral, sage and lilac palette; the SVG uses the
+original `InkArtwork.tsx` note silhouette. No generated example notes are added.
+
+Notes accept 1–9 whitespace-separated words and at most 120 characters, with
+matching normalization/validation in the browser and Worker. Text is rendered
+with text nodes; only explicit HTTP(S) links become anchors, with
+`noopener noreferrer nofollow ugc`. A note can be placed in a chosen empty slot
+or the next available slot. The posting form identifies the text as public and
+requires the 18+/chat-rules acknowledgement.
+
+`STICKY_WALL` / `StickyWall` is a separate SQLite Durable Object, with an additive
+`sticky-wall-v1` migration. Notes persist across page loads and deployments;
+they do not expire automatically. Reads expose only public note data, capacity,
+occupancy, revision and removal eligibility. No guest chat/session is required.
+The client polls at 15-second intervals only while the wall is visible; a closed
+mobile wall, background tab and active conversation do not keep polling.
+
+Public removal is enabled when the current count is at least 12/20 (60%). A
+single storage transaction checks that threshold and removes the selected note.
+At 12, one successful removal takes the wall to 11 and locks removals again.
+It applies equally to all notes, with no ownership privilege. The client waits
+for the server, then animates deleted paper falling below the viewport, including
+notes removed by other visitors between polls. Reduced-motion preferences skip
+the falling animation. Revision checks prevent older responses restoring notes.
+Posting uses a stable request ID so retries cannot duplicate a note, and slot
+conflicts/full walls retain the draft with an actionable error.
+
+Daily wall-specific network HMACs enforce 3 posts, 30 removals and 10 reports per
+hour per network. These are separate from the chat and visitor-counter keys.
+Rate-limit rows expire after one hour. Anyone can report a note at any occupancy;
+reports retain its text, reason and protected moderation identifiers for up to
+30 days. Alarm cleanup handles expiry even without subsequent visitors. The
+public API never exposes protected network identifiers, reports or credentials.
+
+Moderators can read `GET /wall-api/moderation` using the existing moderator bearer
+token. `POST` to that endpoint with `{"action":"remove","id":"NOTE_UUID"}`
+removes a note at any occupancy and marks its reports reviewed. Keep the token
+private. No dedicated new moderator screen or paid service is introduced.
+
+Validated and deployed on 25 November 2026. Run
+`node scripts/verify-sticky-wall.cjs` for seven SQLite-backed protocol checks:
+persistence/retries, text/age/payload limits, origin/method checks, atomic
+12-to-11 removal locking, concurrent slot claims/full capacity, hourly posting
+limits, and private moderation/report expiry. The seven visitor-counter checks
+and ten shared-chat checks also passed. Wrangler's deployment dry run passed.
+
+Browser QA used the local Worker at 320px, 390px, 1000px and 1366px. It covered
+posting, the ten-word disabled state, colour selection, links, report submission,
+Escape/focus restoration, a note shared between two tabs, polling updates,
+removal unlocking/relocking, and the falling ghost's creation and cleanup.
+No browser console errors were observed. Test notes remain in local QA storage
+only. Reduced motion is handled in CSS and JavaScript; a browser preference
+override was not exercised. Production verification confirmed HTTP 200 for the
+homepage and wall API, the empty shared wall, and its rendered controls.
+
+Cloudflare version: `dd917322-0dac-4282-a311-210c5fb91fe9`.
+
 ### Public five-second visit counter
 
 The matching header shows **Visits**. Each page load counts once after five

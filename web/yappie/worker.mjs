@@ -1,8 +1,10 @@
 import { handleWebChat, serveWebPage } from './guest-web.mjs';
 import { handleAppReports, serveAppChat } from './app-chat.mjs';
 import { handleVisitorCounter, withVisitorCounter } from './visitor-counter.mjs';
+import { handleStickyWall } from './sticky-wall.mjs';
 export { GuestChatPool } from './guest-chat-pool.mjs';
 export { VisitorCounter } from './visitor-counter.mjs';
+export { StickyWall } from './sticky-wall.mjs';
 
 const upstream = 'https://fzpehebwhsfrrgdugxpr.supabase.co';
 const appCallback = 'socialdiscovery://auth/callback';
@@ -53,6 +55,7 @@ export async function handle(request, env, verify = fetch) {
   const { pathname } = url;
   const action = Object.hasOwn(actions, pathname) ? actions[pathname] : null;
   if (!action) {
+    if (pathname.startsWith('/wall-api/')) return handleStickyWall(request, env);
     if (pathname.startsWith('/visitor-api/')) return handleVisitorCounter(request, env);
     if (pathname === '/chat-app') return serveAppChat(request, env);
     if (pathname === '/chat-api/app/reports') return handleAppReports(request, env);

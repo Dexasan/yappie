@@ -22,7 +22,9 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://yappie.site/#organization","name":"Yappie","url":"https://yappie.site/","logo":"https://yappie.site/assets/yappie-mark.png"},{"@type":"WebSite","@id":"https://yappie.site/#website","name":"Yappie","url":"https://yappie.site/","inLanguage":"en","publisher":{"@id":"https://yappie.site/#organization"}},{"@type":"WebApplication","@id":"https://yappie.site/#app","name":"Yappie","url":"https://yappie.site/","description":"Free one-to-one text chat with strangers for adults 18 and older, with optional interests and a choice of chat language. No sign-up or download required.","applicationCategory":"SocialNetworkingApplication","operatingSystem":"Any","browserRequirements":"Requires JavaScript and a modern web browser","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},"publisher":{"@id":"https://yappie.site/#organization"}}]}</script>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/chat.css">
+  <link rel="stylesheet" href="/sticky-wall.css">
   <script type="module" src="/chat.js"></script>
+  <script type="module" src="/sticky-wall.js"></script>
 </head>
 <body class="chat-page" data-phase="start">
   <header id="match-header" class="match-header">
@@ -95,6 +97,7 @@
         <button id="cancel" class="button secondary" type="button">Cancel <kbd>Esc</kbd></button>
       </div>
     </section>
+    <section id="sticky-wall" class="sticky-wall" aria-label="Community sticky-note wall" hidden></section>
     <section class="chat-info" aria-labelledby="how-chat-works">
       <h2 id="how-chat-works">How to chat with strangers on Yappie</h2>
       <p>Yappie connects adults for free, one-to-one text conversations in a browser. You do not need an account, a download, a camera, or a microphone to start.</p>

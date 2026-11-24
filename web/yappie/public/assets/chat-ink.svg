@@ -3,6 +3,11 @@
   <symbol id="note" viewBox="0 0 100 100" preserveAspectRatio="none">
     <path d="M4 3 34 5 64 2 98 5 96 39 99 71 96 98 59 96 29 99 2 95 4 62 1 33Z" fill="#36201B" stroke="#BF3826" stroke-width=".35"/>
   </symbol>
+  <symbol id="sticky-note" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <!-- The original note silhouette, recoloured for the community wall. -->
+    <path d="M4 3 34 5 64 2 98 5 96 39 99 71 96 98 59 96 29 99 2 95 4 62 1 33Z" fill="currentColor" stroke="#77746A" stroke-width=".35"/>
+    <path d="m77 97 17-16-2 16Z" fill="#111110" opacity=".13"/>
+  </symbol>
   <symbol id="ticket" viewBox="0 0 100 100" preserveAspectRatio="none">
     <path d="M3 4 97 2 98 29C93 30 93 42 98 43L97 97 3 99 2 44C7 42 7 31 2 30Z" fill="#22221F" stroke="#77746A" stroke-width=".35"/>
   </symbol>
