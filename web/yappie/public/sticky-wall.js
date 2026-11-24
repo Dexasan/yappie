@@ -6,17 +6,14 @@ if (root && document.body.dataset.appSession !== 'true') setupWall(root);
 function setupWall(root) {
   // Static UI only. Public note text is always inserted as text nodes, never HTML.
   root.innerHTML = `
-    <button class="wall-toggle" type="button" aria-expanded="false" aria-controls="wall-sides"><span>Sticky wall</span><span class="wall-mobile-count">Loading…</span><span aria-hidden="true">+</span></button>
     <div class="wall-sides" id="wall-sides">
       <aside class="wall-side wall-side-left" aria-labelledby="wall-title">
-        <div class="wall-tools"><div><h2 id="wall-title">Leave a note</h2><p class="wall-meter">Loading the wall…</p></div><button class="wall-add" type="button" aria-label="Write a sticky note" title="Write a sticky note" disabled>+</button></div>
-        <p class="wall-rule">Under 10 words. A handle or link is welcome.</p>
-        <p class="wall-removal-rule">Anyone can remove notes once 12 of 20 spaces are full.</p>
-        <p class="wall-status" role="status" aria-live="polite"></p>
+        <div class="wall-tools"><h2 id="wall-title">Leave a note</h2><button class="wall-add" type="button" aria-label="Write a sticky note" title="Loading the wall" disabled>+</button></div>
+        <p class="wall-status sr-only" role="status" aria-live="polite">Loading the wall…</p>
         <button class="wall-retry" type="button" hidden>Try loading again</button>
         <div class="wall-grid wall-left" role="list" aria-label="Left wall notes"></div>
       </aside>
-      <aside class="wall-side wall-side-right" aria-label="Right sticky-note wall"><div class="wall-right-heading"><span>Sticky notes</span><span aria-hidden="true">↙</span></div><div class="wall-grid wall-right" role="list" aria-label="Right wall notes"></div></aside>
+      <aside class="wall-side wall-side-right" aria-label="Right sticky-note wall"><div class="wall-grid wall-right" role="list" aria-label="Right wall notes"></div></aside>
     </div>
     <dialog class="wall-dialog" id="wall-write-dialog" aria-labelledby="wall-write-title">
       <form class="wall-write-form">
@@ -44,11 +41,7 @@ function setupWall(root) {
     </dialog>`;
   root.hidden = false;
   const find = selector => root.querySelector(selector);
-  const mobileToggle = find('.wall-toggle');
   const add = find('.wall-add');
-  const meter = find('.wall-meter');
-  const mobileCount = find('.wall-mobile-count');
-  const removalRule = find('.wall-removal-rule');
   const status = find('.wall-status');
   status.tabIndex = -1;
   const retry = find('.wall-retry');
@@ -64,8 +57,14 @@ function setupWall(root) {
   const pendingRemovals = new Set();
   const reported = new Set();
   const desktopWall = window.matchMedia('(min-width: 1000px)');
-  let state = null, selectedSlot = null, draftId, postBusy = false, reportBusy = false;
+  const canvases = [find('.wall-left'), find('.wall-right')];
+  const layouts = new WeakMap();
+  const arrivals = new Set();
+  const arrivalOrigins = new Map();
+  let state = null, draftId, postBusy = false, reportBusy = false;
   let reportNote, opener, refreshPromise, pollTimer;
+  let layoutFrame, wallInView = false;
+  const resizeObserver = new ResizeObserver(() => scheduleLayout());
 
   const slots = Array.from({ length: WALL_CAPACITY }, (_, slot) => {
     const element = document.createElement('div');
@@ -73,13 +72,14 @@ function setupWall(root) {
     element.dataset.slot = String(slot);
     element.setAttribute('role', 'listitem');
     (slot < WALL_CAPACITY / 2 ? find('.wall-left') : find('.wall-right')).append(element);
-    emptySlot(element, slot);
+    emptySlot(element);
     return element;
   });
 
   function announce(message, error = false) {
     status.textContent = message;
     status.classList.toggle('wall-error', error);
+    status.classList.toggle('sr-only', !error);
   }
 
   async function api(path, body) {
@@ -98,20 +98,121 @@ function setupWall(root) {
     return data;
   }
 
-  function emptySlot(element, slot) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'wall-empty';
-    button.setAttribute('aria-label', `Leave a note in space ${slot + 1}`);
-    button.title = 'Leave a note here';
-    button.disabled = !state;
-    const mark = document.createElement('span');
-    mark.textContent = '+';
-    mark.setAttribute('aria-hidden', 'true');
-    button.append(mark);
-    button.addEventListener('click', () => openEditor(slot, button));
+  function emptySlot(element) {
+    const previous = element.querySelector('.wall-note');
+    if (previous) resizeObserver.unobserve(previous);
+    arrivals.delete(element.dataset.noteId);
+    arrivalOrigins.delete(element.dataset.noteId);
     delete element.dataset.noteId;
-    element.replaceChildren(button);
+    element.hidden = true;
+    element.replaceChildren();
+  }
+
+  // Each note keeps its own seeded scatter rather than following a row or column.
+  // Collision checks keep the paper and its controls reachable on narrow walls.
+  function randomFor(id) {
+    let seed = 2166136261;
+    for (const char of id) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619);
+    return () => {
+      seed += 0x6D2B79F5;
+      let value = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      value ^= value + Math.imul(value ^ value >>> 7, 61 | value);
+      return ((value ^ value >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function scheduleLayout() {
+    if (layoutFrame) return;
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = undefined;
+      for (const canvas of canvases) layoutCanvas(canvas);
+    });
+  }
+
+  function layoutCanvas(canvas) {
+    const width = canvas.clientWidth;
+    if (width < 40 || !canvas.getClientRects().length) return;
+    const elements = [...canvas.querySelectorAll('.wall-slot[data-note-id]')]
+      .sort((a, b) => Number(a.dataset.created) - Number(b.dataset.created) || a.dataset.noteId.localeCompare(b.dataset.noteId));
+    if (!elements.length) { canvas.style.height = '0px'; layouts.delete(canvas); return; }
+    const noteWidth = width >= 300 ? Math.min(174, (width - 30) / 2) : Math.min(180, width - 24);
+    for (const element of elements) element.style.width = `${noteWidth}px`;
+    const sizes = new Map(elements.map(element => [element.dataset.noteId, element.offsetHeight]));
+    let layout = layouts.get(canvas);
+    if (!layout || Math.abs(layout.width - width) > 1 || [...layout.places].some(([id, place]) => sizes.has(id) && Math.abs(sizes.get(id) - place.height) > 1)) {
+      layout = { width, places: new Map() }; layouts.set(canvas, layout);
+    }
+    for (const id of layout.places.keys()) if (!sizes.has(id)) layout.places.delete(id);
+    const baseHeight = desktopWall.matches ? Math.max(300, innerHeight - 210) : 420;
+    let areaHeight = Math.max(baseHeight, [...sizes.values()].reduce((sum, height) => sum + noteWidth * height, 0) / (width * .58));
+    const landing = [];
+    for (const element of elements) {
+      const id = element.dataset.noteId, height = sizes.get(id), article = element.querySelector('.wall-note');
+      let place = layout.places.get(id);
+      if (!place) {
+        const random = randomFor(id);
+        const maxTilt = Math.min(8, Math.atan2(Math.max(0, width - noteWidth - 24), height) * 180 / Math.PI);
+        const tilt = (random() * 2 - 1) * maxTilt;
+        const radians = Math.abs(tilt) * Math.PI / 180;
+        const boxWidth = noteWidth * Math.cos(radians) + height * Math.sin(radians);
+        const boxHeight = height * Math.cos(radians) + noteWidth * Math.sin(radians);
+        let candidate;
+        // Grow the scrollable wall if necessary instead of covering another note.
+        for (let round = 0; !candidate && round < 8; round++) {
+          const bottom = Math.max(areaHeight, ...[...layout.places.values()].map(p => p.y + p.boxHeight));
+          for (let attempt = 0; attempt < 160; attempt++) {
+            const x = 6 + random() * Math.max(0, width - boxWidth - 12);
+            const y = 12 + random() * Math.max(0, bottom - boxHeight - 24);
+            if ([...layout.places.values()].every(p => x + boxWidth + 10 <= p.x || p.x + p.boxWidth + 10 <= x || y + boxHeight + 14 <= p.y || p.y + p.boxHeight + 14 <= y)) {
+              candidate = { x, y }; break;
+            }
+          }
+          if (!candidate) areaHeight = bottom + boxHeight + 30;
+        }
+        candidate ??= { x: (width - boxWidth) / 2, y: Math.max(12, ...[...layout.places.values()].map(p => p.y + p.boxHeight + 24)) };
+        place = { ...candidate, height, boxWidth, boxHeight, tilt };
+        layout.places.set(id, place);
+      }
+      element.style.left = `${place.x + (place.boxWidth - noteWidth) / 2}px`;
+      element.style.top = `${place.y + (place.boxHeight - height) / 2}px`;
+      element.style.setProperty('--note-tilt', `${place.tilt}deg`);
+      if (arrivals.delete(id)) landing.push({ article, id });
+    }
+    canvas.style.height = `${Math.ceil(Math.max(...[...layout.places.values()].map(p => p.y + p.boxHeight)) + 24)}px`;
+    for (const { article, id } of landing) land(article, id);
+  }
+
+  function land(article, id) {
+    const origin = arrivalOrigins.get(id);
+    arrivalOrigins.delete(id);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (origin) {
+      if (desktopWall.matches) {
+        const side = article.closest('.wall-side');
+        const bounds = side.getBoundingClientRect(), note = article.getBoundingClientRect();
+        const heading = side.querySelector('.wall-tools')?.offsetHeight || 0;
+        if (note.top < bounds.top + heading + 12) side.scrollTop += note.top - bounds.top - heading - 12;
+        else if (note.bottom > bounds.bottom - 12) side.scrollTop += note.bottom - bounds.bottom + 12;
+      } else article.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    }
+    if (reducedMotion) return;
+    const rect = article.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > innerHeight) return;
+    const start = origin || { x: innerWidth / 2, y: Math.min(innerHeight / 2, rect.top - 100) };
+    const ghost = article.cloneNode(true);
+    ghost.classList.add('wall-flying', 'wall-arriving');
+    ghost.setAttribute('aria-hidden', 'true'); ghost.inert = true;
+    ghost.style.left = `${rect.left + (rect.width - article.offsetWidth) / 2}px`;
+    ghost.style.top = `${rect.top + (rect.height - article.offsetHeight) / 2}px`;
+    ghost.style.width = `${article.offsetWidth}px`; ghost.style.height = `${article.offsetHeight}px`;
+    ghost.style.setProperty('--note-tilt', getComputedStyle(article).getPropertyValue('--note-tilt'));
+    ghost.style.setProperty('--arrive-x', `${start.x - rect.left - rect.width / 2}px`);
+    ghost.style.setProperty('--arrive-y', `${start.y - rect.top - rect.height / 2}px`);
+    article.classList.add('wall-landing-pending');
+    document.body.append(ghost);
+    const finish = () => { ghost.remove(); article.classList.remove('wall-landing-pending'); };
+    ghost.addEventListener('animationend', finish, { once: true });
+    setTimeout(finish, 1100);
   }
 
   function paper() {
@@ -147,7 +248,7 @@ function setupWall(root) {
 
   function noteElement(note) {
     const article = document.createElement('article');
-    article.className = 'wall-note wall-arriving';
+    article.className = 'wall-note';
     article.dataset.color = note.color;
     article.setAttribute('aria-label', `Sticky note: ${note.text}`);
     const text = document.createElement('p');
@@ -173,7 +274,7 @@ function setupWall(root) {
     const rect = article.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const ghost = article.cloneNode(true);
-    ghost.classList.remove('wall-arriving'); ghost.classList.add('wall-falling');
+    ghost.classList.remove('wall-arriving', 'wall-landing-pending'); ghost.classList.add('wall-falling');
     ghost.setAttribute('aria-hidden', 'true'); ghost.inert = true;
     ghost.style.left = `${rect.left}px`; ghost.style.top = `${rect.top}px`;
     ghost.style.width = `${article.offsetWidth}px`; ghost.style.height = `${article.offsetHeight}px`;
@@ -195,24 +296,25 @@ function setupWall(root) {
     const initial = !state;
     let restoreSlot = null;
     state = next;
-    const percent = Math.round(state.count / WALL_CAPACITY * 100);
-    meter.textContent = `${state.count}/${WALL_CAPACITY} notes · ${percent}% full`;
-    mobileCount.textContent = `${state.count}/${WALL_CAPACITY}`;
     add.disabled = state.count >= WALL_CAPACITY;
     add.title = add.disabled ? 'Remove a note to make space' : 'Write a sticky note';
     root.dataset.removable = String(state.removable);
-    removalRule.textContent = state.removable ? '60% full. Anyone can peel off any note.' : 'Removing opens at 60% full (12 of 20 notes).';
     const bySlot = new Map(state.notes.map(note => [note.slot, note]));
     for (const [slot, element] of slots.entries()) {
       const note = bySlot.get(slot);
       if (element.dataset.noteId !== note?.id) {
         if (element.contains(document.activeElement)) restoreSlot = slot;
         if (element.dataset.noteId && !initial) fall(element.querySelector('.wall-note'));
-        if (note) { element.dataset.noteId = note.id; element.replaceChildren(noteElement(note)); }
-        else emptySlot(element, slot);
+        if (note) {
+          const previous = element.querySelector('.wall-note');
+          if (previous) resizeObserver.unobserve(previous);
+          element.dataset.noteId = note.id; element.dataset.created = String(note.created);
+          element.hidden = false;
+          const article = noteElement(note);
+          element.replaceChildren(article); resizeObserver.observe(article);
+          if (!initial) arrivals.add(note.id);
+        } else emptySlot(element);
       }
-      const empty = element.querySelector('.wall-empty');
-      if (empty) empty.disabled = false;
       const remove = element.querySelector('.wall-remove');
       if (remove) {
         remove.disabled = !state.removable || pendingRemovals.has(note.id);
@@ -222,16 +324,17 @@ function setupWall(root) {
       if (flag) { flag.disabled = reported.has(note.id); flag.title = reported.has(note.id) ? 'You reported this note' : 'Report this note'; }
     }
     updateDraft();
-    if (initial && !state.count) announce('The wall is empty. Pick a space to leave a note.');
+    scheduleLayout();
+    if (initial) announce(state.count ? 'Wall loaded.' : 'The wall is empty. Use the plus button to leave a note.');
     if (restoreSlot !== null && !writeDialog.open && !reportDialog.open) {
       const target = slots[restoreSlot].querySelector('button:not(:disabled), a[href]') || (add.disabled ? status : add);
       target.focus();
     }
   }
 
-  function openEditor(slot, button) {
+  function openEditor(button) {
     if (!state || state.count >= WALL_CAPACITY || writeDialog.open) return;
-    selectedSlot = slot; draftId = crypto.randomUUID(); opener = button;
+    draftId = crypto.randomUUID(); opener = button;
     formStatus.textContent = '';
     updateDraft(); writeDialog.showModal(); textarea.focus();
   }
@@ -246,23 +349,26 @@ function setupWall(root) {
     post.disabled = postBusy || !state || state.count >= WALL_CAPACITY || !count || invalid || !writeForm.elements.adult.checked;
   }
   writeForm.addEventListener('input', updateDraft);
-  add.addEventListener('click', () => openEditor(null, add));
+  add.addEventListener('click', () => openEditor(add));
 
   writeForm.addEventListener('submit', async event => {
     event.preventDefault();
     if (postBusy || !writeForm.reportValidity()) return;
     const text = cleanWallText(textarea.value);
     if (!text || wallWordCount(text) > WALL_MAX_WORDS || text.length > WALL_MAX_LENGTH) { formStatus.textContent = 'Use 1–9 words, up to 120 characters.'; return; }
-    const payload = { id: draftId, text, color: new FormData(writeForm).get('color'), slot: selectedSlot, adult: writeForm.elements.adult.checked };
+    const payload = { id: draftId, text, color: new FormData(writeForm).get('color'), adult: writeForm.elements.adult.checked };
+    const draftRect = textarea.getBoundingClientRect();
+    const origin = { x: draftRect.left + draftRect.width / 2, y: draftRect.top + draftRect.height / 2 };
     postBusy = true; updateDraft(); formStatus.textContent = 'Posting…';
     for (const control of writeForm.querySelectorAll('input, textarea')) control.disabled = true;
     const close = writeDialog.querySelector('.wall-close'); close.disabled = true;
     try {
-      render(await api('notes', payload));
+      const next = await api('notes', payload);
+      arrivalOrigins.set(payload.id, origin);
+      render(next);
       writeForm.reset(); writeDialog.close(); announce('Your note is on the wall.');
     } catch (error) {
       if (error.wall) render(error.wall);
-      if (error.code === 'slot_taken') selectedSlot = null;
       formStatus.textContent = error.message;
     } finally {
       postBusy = false; close.disabled = false;
@@ -277,7 +383,7 @@ function setupWall(root) {
     try {
       render(await api('remove', { id: note.id }));
       announce('Note removed. There’s room for another.');
-      slots[note.slot].querySelector('.wall-empty')?.focus();
+      (add.disabled ? status : add).focus();
     } catch (error) {
       if (error.wall) render(error.wall);
       announce(error.message, true);
@@ -313,34 +419,34 @@ function setupWall(root) {
       if (!target.disabled) target.focus(); else status.focus();
     });
   }
-  mobileToggle.addEventListener('click', () => {
-    const expanded = root.classList.toggle('wall-open');
-    mobileToggle.setAttribute('aria-expanded', String(expanded));
-    if (expanded) refresh();
-    schedulePoll();
-  });
-
   function refresh() {
     if (refreshPromise) return refreshPromise;
     refreshPromise = api('notes').then(next => {
       render(next); retry.hidden = true;
       if (status.classList.contains('wall-error')) announce('Wall updated.');
     }).catch(error => {
-      if (!state) { meter.textContent = 'Wall unavailable'; mobileCount.textContent = 'Unavailable'; }
+      if (!state) add.title = 'Wall unavailable';
       announce(error.message, true); retry.hidden = false;
     }).finally(() => { refreshPromise = undefined; });
     return refreshPromise;
   }
   function wallVisible() {
     return document.visibilityState === 'visible' && !['active', 'ended'].includes(document.body.dataset.phase) &&
-      (desktopWall.matches || root.classList.contains('wall-open'));
+      (desktopWall.matches || wallInView);
   }
   function schedulePoll(delay = 15000) {
     clearTimeout(pollTimer);
     if (wallVisible()) pollTimer = setTimeout(async () => { await refresh(); schedulePoll(); }, delay);
   }
   retry.addEventListener('click', () => refresh());
-  desktopWall.addEventListener('change', () => schedulePoll(0));
+  desktopWall.addEventListener('change', () => { scheduleLayout(); schedulePoll(0); });
+  for (const canvas of canvases) resizeObserver.observe(canvas);
+  new IntersectionObserver(entries => {
+    wallInView = entries.some(entry => entry.isIntersecting);
+    schedulePoll(0);
+  }).observe(root);
+  window.addEventListener('resize', scheduleLayout);
+  document.fonts.ready.then(scheduleLayout);
   document.addEventListener('visibilitychange', () => schedulePoll(0));
   new MutationObserver(() => schedulePoll(0)).observe(document.body, { attributes: true, attributeFilter: ['data-phase'] });
   window.addEventListener('pagehide', () => clearTimeout(pollTimer));

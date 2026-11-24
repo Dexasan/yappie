@@ -33,25 +33,48 @@ live templates. For rollout and rollback details, see
 
 ### Community sticky-note wall
 
-The matching page has a shared wall with 20 note slots, split between the black
-desktop margins. Below 1000px it becomes an expandable wall beneath matching.
+The matching page has a shared wall with a capacity of 20 notes, split between
+the black desktop margins. Below 1000px it sits beneath matching.
 It is hidden during conversations and excluded from the embedded Android page.
 Paper colours reuse the chalk, coral, sage and lilac palette; the SVG uses the
 original `InkArtwork.tsx` note silhouette. No generated example notes are added.
 
+The current revision simplifies the wall to “Leave a note” and a plus
+button, with no empty placeholders, occupancy counter or explanatory wall copy.
+Loading and success announcements remain available to screen readers; errors
+and retry controls stay visible. Posting and safety instructions stay in the
+editor. New notes use a random free slot on either side, then seeded positions
+and angles within that wall. Collision checks keep notes apart, and existing
+placements stay put while the viewport and note sizes remain unchanged.
+Successful posts fly from the editor to the paper's final position, with a
+separate temporary overlay so side-wall scrolling cannot clip the flight.
+Desktop posting scrolls only the wall's own sidebar, preserving the chat page's
+scroll position. Mobile posting brings the new paper into view.
+
+Validated and deployed on 25 November 2026. All seven sticky-wall protocol
+checks, seven visitor-counter checks and ten shared-chat checks passed. The
+Worker deployment dry run passed. Browser QA covered the empty wall, random
+slots and scattered positions, flight-overlay creation/cleanup, the desktop
+scroll regression, 120-character text, the disabled ten-word state, no note
+overlap/horizontal overflow at 320px and 390px, desktop clearance at 1000px,
+falling removal, and relocking at 11 notes. No browser console errors were
+observed. Production checks confirmed the updated assets and preserved existing
+notes. All write fixtures stayed in local QA storage.
+
+Cloudflare version: `3a4052cd-29fd-4e51-b53b-2e87c181a47e`.
+
 Notes accept 1–9 whitespace-separated words and at most 120 characters, with
 matching normalization/validation in the browser and Worker. Text is rendered
 with text nodes; only explicit HTTP(S) links become anchors, with
-`noopener noreferrer nofollow ugc`. A note can be placed in a chosen empty slot
-or the next available slot. The posting form identifies the text as public and
+`noopener noreferrer nofollow ugc`. The posting form identifies the text as public and
 requires the 18+/chat-rules acknowledgement.
 
 `STICKY_WALL` / `StickyWall` is a separate SQLite Durable Object, with an additive
 `sticky-wall-v1` migration. Notes persist across page loads and deployments;
 they do not expire automatically. Reads expose only public note data, capacity,
 occupancy, revision and removal eligibility. No guest chat/session is required.
-The client polls at 15-second intervals only while the wall is visible; a closed
-mobile wall, background tab and active conversation do not keep polling.
+The client polls at 15-second intervals only while the wall is visible; an
+offscreen mobile wall, background tab and active conversation do not keep polling.
 
 Public removal is enabled when the current count is at least 12/20 (60%). A
 single storage transaction checks that threshold and removes the selected note.
@@ -75,7 +98,7 @@ token. `POST` to that endpoint with `{"action":"remove","id":"NOTE_UUID"}`
 removes a note at any occupancy and marks its reports reviewed. Keep the token
 private. No dedicated new moderator screen or paid service is introduced.
 
-Validated and deployed on 25 November 2026. Run
+The preceding grid version was validated and deployed on 25 November 2026. Run
 `node scripts/verify-sticky-wall.cjs` for seven SQLite-backed protocol checks:
 persistence/retries, text/age/payload limits, origin/method checks, atomic
 12-to-11 removal locking, concurrent slot claims/full capacity, hourly posting
@@ -91,7 +114,7 @@ only. Reduced motion is handled in CSS and JavaScript; a browser preference
 override was not exercised. Production verification confirmed HTTP 200 for the
 homepage and wall API, the empty shared wall, and its rendered controls.
 
-Cloudflare version: `dd917322-0dac-4282-a311-210c5fb91fe9`.
+Preceding grid release's Cloudflare version: `dd917322-0dac-4282-a311-210c5fb91fe9`.
 
 ### Public five-second visit counter
 

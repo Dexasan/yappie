@@ -119,7 +119,8 @@ export class StickyWall extends DurableObject {
         if (existing) return existing.text === text && existing.color === body.color ? json(this.snapshot()) : this.fail('Your earlier note was posted. Close this editor to start another.', 409, 'already_posted');
         const occupied = new Set(this.sql.exec('SELECT slot FROM wall_notes').toArray().map(note => note.slot));
         if (occupied.size >= WALL_CAPACITY) return this.fail('The wall is full. Remove a note to make space.', 409, 'full');
-        const slot = body.slot ?? Array.from({ length: WALL_CAPACITY }, (_, index) => index).find(index => !occupied.has(index));
+        const free = Array.from({ length: WALL_CAPACITY }, (_, index) => index).filter(index => !occupied.has(index));
+        const slot = body.slot ?? free[Math.floor(Math.random() * free.length)];
         if (!Number.isInteger(slot) || slot < 0 || slot >= WALL_CAPACITY) return this.fail('Choose a free space.', 400);
         if (occupied.has(slot)) return this.fail('That space was just taken. Post again to use another free space.', 409, 'slot_taken');
         if (!this.take('post:' + network, 3, now)) return this.fail('Three notes per hour from this network. Come back later.', 429);
