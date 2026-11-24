@@ -41,17 +41,33 @@ original `InkArtwork.tsx` note silhouette. No generated example notes are added.
 
 The current revision simplifies the wall to “Leave a note” and a plus
 button, with no empty placeholders, occupancy counter or explanatory wall copy.
+The control combines the label and drawn plus into one irregular
+paper control with the approved mouth artwork and condensed display lettering.
+It retains the full-button keyboard/touch target and a narrower desktop variant.
 Loading and success announcements remain available to screen readers; errors
 and retry controls stay visible. Posting and safety instructions stay in the
 editor. New notes use a random free slot on either side, then seeded positions
 and angles within that wall. Collision checks keep notes apart, and existing
 placements stay put while the viewport and note sizes remain unchanged.
-Successful posts fly from the editor to the paper's final position, with a
-separate temporary overlay so side-wall scrolling cannot clip the flight.
-Desktop posting scrolls only the wall's own sidebar, preserving the chat page's
-scroll position. Mobile posting brings the new paper into view.
+Successful posts fly from the editor to the paper's final position using a
+separate temporary overlay. Both walls are anchored to the document and scroll
+with the page, without fixed sidebars, height caps or independent scrollbars.
+Their content contributes to the page's scrollable area, so lower notes remain
+reachable. Posting brings the new paper into view using that same page scroll.
+The shared-scroll and illustrated-control revision was validated and deployed
+on 25 November 2026. All 24 sticky-wall, visitor-counter and shared-chat checks
+passed. Browser QA confirmed that scrolling over a note moves the document,
+both wall sides have visible overflow and no independent scrolling, and the
+document extends far enough to reach the lowest notes on a populated wall.
+The control fits at 320px, 390px, 1000px and 1366px, opens the editor with Enter,
+and preserves posting/landing and removal. No browser console errors were
+observed. Production assets/API returned HTTP 200 and the live control rendered.
+Local write fixtures were not published.
 
-Validated and deployed on 25 November 2026. All seven sticky-wall protocol
+Current Cloudflare version: `329b8f0d-ecf8-49a9-bdc3-3446d20d00d6`.
+
+The preceding sidebar revision was validated and deployed on 25 November 2026.
+All seven sticky-wall protocol
 checks, seven visitor-counter checks and ten shared-chat checks passed. The
 Worker deployment dry run passed. Browser QA covered the empty wall, random
 slots and scattered positions, flight-overlay creation/cleanup, the desktop
@@ -61,7 +77,7 @@ falling removal, and relocking at 11 notes. No browser console errors were
 observed. Production checks confirmed the updated assets and preserved existing
 notes. All write fixtures stayed in local QA storage.
 
-Cloudflare version: `3a4052cd-29fd-4e51-b53b-2e87c181a47e`.
+Preceding sidebar release's Cloudflare version: `3a4052cd-29fd-4e51-b53b-2e87c181a47e`.
 
 Notes accept 1–9 whitespace-separated words and at most 120 characters, with
 matching normalization/validation in the browser and Worker. Text is rendered
@@ -73,8 +89,8 @@ requires the 18+/chat-rules acknowledgement.
 `sticky-wall-v1` migration. Notes persist across page loads and deployments;
 they do not expire automatically. Reads expose only public note data, capacity,
 occupancy, revision and removal eligibility. No guest chat/session is required.
-The client polls at 15-second intervals only while the wall is visible; an
-offscreen mobile wall, background tab and active conversation do not keep polling.
+The client polls at 15-second intervals only while a wall side is visible;
+offscreen walls, background tabs and active conversations do not keep polling.
 
 Public removal is enabled when the current count is at least 12/20 (60%). A
 single storage transaction checks that threshold and removes the selected note.

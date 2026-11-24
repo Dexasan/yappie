@@ -2,13 +2,20 @@
 .sticky-wall { margin-block: 22px 10px; }
 .wall-sides { display: block; }
 .wall-side { min-width: 0; }
-.wall-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px; }
-.wall-tools h2 { margin: 0; font: italic 29px/1.1 var(--editorial); text-transform: none; }
+.wall-tools { padding: 4px 2px 12px; }
 .chat-page .wall-add {
-  flex: none; display: grid; place-items: center; width: 48px; height: 48px; padding: 0;
-  border: 0; background: var(--accent-soft); color: var(--red); font-size: 32px;
-  clip-path: polygon(4% 3%, 96% 6%, 99% 94%, 5% 98%, 1% 38%);
+  position: relative; isolation: isolate; display: grid; grid-template-columns: 52px minmax(0, 1fr) 38px;
+  align-items: center; gap: 10px; width: 100%; max-width: 300px; min-height: 104px; padding: 18px 20px;
+  border: 0; background: transparent; color: var(--paper); text-align: left;
+  transform: rotate(-2deg); transition: transform 160ms ease, filter 160ms ease;
 }
+.wall-add-paper { position: absolute; z-index: -1; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wall-add-mouth { display: block; width: 52px; height: 52px; object-fit: contain; transform: rotate(-12deg); }
+.chat-page .wall-add-label { min-width: 0; font: 700 34px/.92 var(--display); text-transform: uppercase; letter-spacing: -.025em; }
+.wall-add-plus { width: 38px; height: 38px; color: var(--red); transform: rotate(5deg); }
+.wall-add-plus path { fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.chat-page .wall-add:hover:not(:disabled) { transform: translateY(-2px) rotate(-1deg); filter: brightness(1.12); }
+.chat-page .wall-add:active:not(:disabled) { transform: rotate(-1deg) scale(.98); }
 .wall-status { margin: 8px 2px; color: var(--paper); font-size: 12px; overflow-wrap: anywhere; }
 .wall-status:empty { display: none; }
 .wall-status:focus { outline: 2px solid var(--red); outline-offset: 3px; }
@@ -89,19 +96,25 @@
 .app-embedded .sticky-wall,
 .chat-page:is([data-phase='active'], [data-phase='ended']) .sticky-wall { display: none !important; }
 @media (min-width: 1000px) {
+  .chat-page.has-sticky-wall { position: relative; }
   .sticky-wall { margin: 0; height: 0; }
   .wall-side {
-    position: fixed; z-index: 1; top: 94px; width: min(360px, calc((100vw - 630px) / 2));
-    max-height: calc(100dvh - 112px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
-    padding: 10px 12px 18px; scrollbar-width: thin; scrollbar-color: var(--rule) transparent;
+    position: absolute; z-index: 1; top: 94px; width: min(360px, calc((100vw - 630px) / 2));
+    padding: 10px 12px 18px;
   }
   .wall-side-left { left: max(16px, calc(50% - 655px)); }
   .wall-side-right { right: max(16px, calc(50% - 655px)); }
-  .wall-tools { position: sticky; z-index: 2; top: -10px; padding-block: 10px; background: var(--ink); }
+  .wall-tools { padding-block: 10px; }
   .wall-side-right { padding-top: 68px; }
 }
-@media (min-width: 1000px) and (max-height: 540px) { .wall-side { top: 70px; max-height: calc(100dvh - 82px); } }
+@media (min-width: 1000px) and (max-height: 540px) { .wall-side { top: 70px; } }
+@media (min-width: 1000px) and (max-width: 1199px) {
+  .chat-page .wall-add { grid-template-columns: 28px minmax(0, 1fr) 24px; gap: 5px; min-height: 86px; padding: 15px 10px; }
+  .wall-add-mouth { width: 28px; height: 34px; }
+  .chat-page .wall-add-label { font-size: 23px; }
+  .wall-add-plus { width: 24px; height: 30px; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .wall-note { transition: none; }
+  .wall-note, .chat-page .wall-add { transition: none; }
   .wall-arriving, .wall-falling { animation: none; }
 }

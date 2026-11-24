@@ -8,7 +8,14 @@ function setupWall(root) {
   root.innerHTML = `
     <div class="wall-sides" id="wall-sides">
       <aside class="wall-side wall-side-left" aria-labelledby="wall-title">
-        <div class="wall-tools"><h2 id="wall-title">Leave a note</h2><button class="wall-add" type="button" aria-label="Write a sticky note" title="Loading the wall" disabled>+</button></div>
+        <div class="wall-tools">
+          <button class="wall-add" type="button" aria-label="Write a sticky note" title="Loading the wall" disabled>
+            <svg class="wall-add-paper" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#note" width="100" height="100"/></svg>
+            <img class="wall-add-mouth" src="/assets/yappie-mark.png" alt="" width="52" height="52">
+            <span class="wall-add-label" id="wall-title">Leave<br>a note</span>
+            <svg class="wall-add-plus" aria-hidden="true" viewBox="0 0 48 48"><path d="M23 8c1 10-1 22 1 32M8 25c10-2 22 0 32-1"/></svg>
+          </button>
+        </div>
         <p class="wall-status sr-only" role="status" aria-live="polite">Loading the wall…</p>
         <button class="wall-retry" type="button" hidden>Try loading again</button>
         <div class="wall-grid wall-left" role="list" aria-label="Left wall notes"></div>
@@ -40,6 +47,7 @@ function setupWall(root) {
       </form>
     </dialog>`;
   root.hidden = false;
+  document.body.classList.add('has-sticky-wall');
   const find = selector => root.querySelector(selector);
   const add = find('.wall-add');
   const status = find('.wall-status');
@@ -186,15 +194,7 @@ function setupWall(root) {
     const origin = arrivalOrigins.get(id);
     arrivalOrigins.delete(id);
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (origin) {
-      if (desktopWall.matches) {
-        const side = article.closest('.wall-side');
-        const bounds = side.getBoundingClientRect(), note = article.getBoundingClientRect();
-        const heading = side.querySelector('.wall-tools')?.offsetHeight || 0;
-        if (note.top < bounds.top + heading + 12) side.scrollTop += note.top - bounds.top - heading - 12;
-        else if (note.bottom > bounds.bottom - 12) side.scrollTop += note.bottom - bounds.bottom + 12;
-      } else article.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
-    }
+    if (origin) article.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
     if (reducedMotion) return;
     const rect = article.getBoundingClientRect();
     if (rect.bottom < 0 || rect.top > innerHeight) return;
@@ -432,7 +432,7 @@ function setupWall(root) {
   }
   function wallVisible() {
     return document.visibilityState === 'visible' && !['active', 'ended'].includes(document.body.dataset.phase) &&
-      (desktopWall.matches || wallInView);
+      wallInView;
   }
   function schedulePoll(delay = 15000) {
     clearTimeout(pollTimer);
@@ -441,10 +441,16 @@ function setupWall(root) {
   retry.addEventListener('click', () => refresh());
   desktopWall.addEventListener('change', () => { scheduleLayout(); schedulePoll(0); });
   for (const canvas of canvases) resizeObserver.observe(canvas);
-  new IntersectionObserver(entries => {
-    wallInView = entries.some(entry => entry.isIntersecting);
+  const visibleSides = new Set();
+  const wallObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) visibleSides.add(entry.target);
+      else visibleSides.delete(entry.target);
+    }
+    wallInView = visibleSides.size > 0;
     schedulePoll(0);
-  }).observe(root);
+  });
+  for (const side of root.querySelectorAll('.wall-side')) wallObserver.observe(side);
   window.addEventListener('resize', scheduleLayout);
   document.fonts.ready.then(scheduleLayout);
   document.addEventListener('visibilitychange', () => schedulePoll(0));
