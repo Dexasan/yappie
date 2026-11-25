@@ -36,6 +36,31 @@
 .chat-brand { display: inline-flex; align-items: center; gap: 8px; font: 700 34px/1 var(--display); letter-spacing: -.8px; text-decoration: none; }
 .chat-brand img, .match-hero img, .stranger-avatar img { object-fit: contain; }
 .brand-dot { color: var(--red); }
+.match-masthead { position: relative; }
+.match-header.match-masthead .chat-shell { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; justify-content: stretch; gap: 0; padding-block: 16px 6px; }
+.match-masthead .chat-wordmark {
+  position: relative; display: inline-flex; align-items: baseline; gap: 0; min-height: 58px;
+  font: 700 clamp(58px, 8vw, 74px)/.9 var(--display); letter-spacing: -.045em;
+  transform: rotate(-3deg); color: var(--paper); padding: 0 4px 9px;
+}
+.chat-wordmark::after {
+  content: ''; position: absolute; left: 4%; right: 12%; bottom: 0; height: 5px;
+  background: var(--accent-solid); transform: rotate(1deg);
+  clip-path: polygon(0 36%, 17% 12%, 42% 25%, 68% 0, 99% 28%, 94% 76%, 65% 90%, 28% 72%, 2% 100%);
+}
+.wordmark-letter { display: inline-block; }
+.wordmark-letter:nth-child(2) { transform: translateY(1px) rotate(3deg); }
+.wordmark-letter:nth-child(3) { transform: rotate(-2deg); }
+.wordmark-letter:nth-child(4) { transform: translateY(-2px) rotate(2deg); }
+.wordmark-letter:nth-child(5) { transform: rotate(-3deg); }
+.wordmark-letter:nth-child(6) { transform: translateY(1px) rotate(2deg); }
+.chat-wordmark .brand-dot { margin-left: 1px; }
+.match-masthead .match-header-actions { position: absolute; top: 18px; right: max(16px, calc(50% - 655px)); }
+@media (max-width: 719px) {
+  .match-header.match-masthead .chat-shell { padding-block: 6px; row-gap: 8px; }
+  .match-masthead .match-header-actions { position: static; grid-row: 1; justify-self: end; }
+  .match-masthead .chat-wordmark { grid-row: 2; }
+}
 .ink-button { display: grid; width: 44px; height: 44px; place-items: center; color: var(--red); }
 .ink-button svg { width: 29px; height: 29px; }
 .match-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
@@ -60,7 +85,7 @@
 .visitor-counter-note a { display: inline-flex; align-items: center; min-height: 44px; color: var(--paper); text-underline-offset: 4px; }
 @media (max-width: 359px) {
   .match-header .chat-shell { gap: 6px; }
-  .match-header .chat-brand { gap: 4px; font-size: 30px; }
+  .match-header:not(.match-masthead) .chat-brand { gap: 4px; font-size: 30px; }
   .match-header .chat-brand img { width: 34px; height: 34px; }
   .match-header-actions { gap: 2px; }
   .visitor-counter summary { min-width: 70px; padding-inline-start: 6px; }
@@ -68,10 +93,10 @@
 
 .paper { position: relative; isolation: isolate; }
 .paper-surface { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
-.match-hero { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-block: 6px 10px; padding: 16px clamp(18px, 5vw, 26px); }
+.match-hero { display: grid; grid-template-columns: minmax(0, max-content) clamp(88px, 18vw, 112px); align-items: center; justify-content: center; gap: 6px; margin-block: 6px 10px; padding: 14px clamp(16px, 4vw, 22px); }
 .match-hero h1 { max-width: none; margin: 0; font: 700 clamp(30px, 7vw, 42px)/1.03 var(--display); letter-spacing: -.02em; text-transform: none; }
 .match-hero p { margin: 6px 0 0; color: var(--muted); font: italic 18px/1.2 var(--editorial); }
-.match-hero img { flex: none; width: clamp(72px, 22vw, 96px); height: auto; transform: rotate(-9deg); }
+.match-hero img { width: 100%; height: auto; transform: rotate(-9deg); }
 .match-panel { padding: 20px clamp(19px, 6vw, 30px) 25px; }
 .match-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px 12px; flex-wrap: wrap; }
 .match-heading h2, .chat-page dialog h2 { margin: 0; font: 400 32px/1 var(--editorial); text-transform: none; }

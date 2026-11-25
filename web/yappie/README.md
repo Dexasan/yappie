@@ -31,6 +31,26 @@ live templates. For rollout and rollback details, see
 
 ## Web chat beta
 
+### Matching-page branding
+
+The matching page and closed-chat fallback use a centred YAPPIE wordmark above
+the hero, with condensed lettering, small individual letter rotations and an
+irregular vermilion underline. The only visible mouth logo on the matching page
+is the larger original artwork beside “Chat with strangers”; the header and
+note control no longer repeat it. The hero groups its copy and artwork with a
+6px gap. Header utilities stay at the page's top right on desktop and occupy
+their own row above the centred wordmark on phones.
+
+Validated and deployed on 25 November 2026. All 24 sticky-wall, visit-counter
+and shared-chat checks passed. Browser checks at 320px, 390px, 1000px and 1366px
+confirmed the wordmark is centred over the hero, exactly one mouth is visible,
+the heading fits, utilities do not overlap, and the page has no horizontal
+overflow. The note editor opens/closes and the wordmark home link works.
+No browser console errors were observed. The live page returned HTTP 200 and
+the same layout checks passed at the normal 1440px viewport.
+
+Current Cloudflare version: `63c75c49-c927-4ed4-bfb5-a34762e981bb`.
+
 ### Community sticky-note wall
 
 The matching page has a shared wall with a capacity of 20 notes, split between
@@ -42,7 +62,7 @@ original `InkArtwork.tsx` note silhouette. No generated example notes are added.
 The current revision simplifies the wall to “Leave a note” and a plus
 button, with no empty placeholders, occupancy counter or explanatory wall copy.
 The control combines the label and drawn plus into one irregular
-paper control with the approved mouth artwork and condensed display lettering.
+paper control with condensed display lettering.
 It retains the full-button keyboard/touch target and a narrower desktop variant.
 Loading and success announcements remain available to screen readers; errors
 and retry controls stay visible. Posting and safety instructions stay in the
@@ -64,7 +84,7 @@ and preserves posting/landing and removal. No browser console errors were
 observed. Production assets/API returned HTTP 200 and the live control rendered.
 Local write fixtures were not published.
 
-Current Cloudflare version: `329b8f0d-ecf8-49a9-bdc3-3446d20d00d6`.
+Shared-scroll release's Cloudflare version: `329b8f0d-ecf8-49a9-bdc3-3446d20d00d6`.
 
 The preceding sidebar revision was validated and deployed on 25 November 2026.
 All seven sticky-wall protocol

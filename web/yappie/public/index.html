@@ -14,9 +14,10 @@
   <script type="module" src="/sticky-wall.js"></script>
 </head>
 <body class="chat-page">
-  <header class="match-header">
+  <header class="match-header match-masthead">
     <div class="chat-shell">
-      <a class="chat-brand" href="/"><img src="/assets/yappie-mark.png" alt="" width="42" height="42"> <span>YAPPIE<span class="brand-dot">.</span></span></a>
+      <a class="chat-brand chat-wordmark" href="/" aria-label="Yappie home"><span aria-hidden="true" class="wordmark-letter">Y</span><span aria-hidden="true" class="wordmark-letter">A</span><span aria-hidden="true" class="wordmark-letter">P</span><span aria-hidden="true" class="wordmark-letter">P</span><span aria-hidden="true" class="wordmark-letter">I</span><span aria-hidden="true" class="wordmark-letter">E</span><span aria-hidden="true" class="brand-dot">.</span></a>
+      <div class="match-header-actions">
       <details class="visitor-counter" id="visitor-counter" aria-busy="true">
         <summary aria-label="Website visits. How counting works"><span>Visits</span><strong id="visitor-count" aria-live="polite" aria-atomic="true">…</strong></summary>
         <div class="visitor-counter-note">
@@ -27,6 +28,7 @@
           <a href="/privacy#visitor-counter">Visitor privacy</a>
         </div>
       </details>
+      </div>
     </div>
   </header>
   <main class="chat-shell">
@@ -36,7 +38,7 @@
         <h1>Chat with strangers</h1>
         <p>Web chat is currently closed.</p>
       </div>
-      <img src="/assets/yappie-mark.png" alt="" width="92" height="92">
+      <img src="/assets/yappie-mark.png" alt="" width="112" height="112">
     </section>
     <section id="sticky-wall" class="sticky-wall" aria-label="Community sticky-note wall" hidden></section>
     <footer class="match-footer"><nav aria-label="Yappie links"><a href="/privacy">Privacy</a><a href="/support">Support</a></nav></footer>

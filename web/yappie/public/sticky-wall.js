@@ -11,7 +11,6 @@ function setupWall(root) {
         <div class="wall-tools">
           <button class="wall-add" type="button" aria-label="Write a sticky note" title="Loading the wall" disabled>
             <svg class="wall-add-paper" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none"><use href="/assets/chat-ink.svg#note" width="100" height="100"/></svg>
-            <img class="wall-add-mouth" src="/assets/yappie-mark.png" alt="" width="52" height="52">
             <span class="wall-add-label" id="wall-title">Leave<br>a note</span>
             <svg class="wall-add-plus" aria-hidden="true" viewBox="0 0 48 48"><path d="M23 8c1 10-1 22 1 32M8 25c10-2 22 0 32-1"/></svg>
           </button>
